@@ -2,6 +2,19 @@
 #define EZGRPC2_DEFS_H
 
 #include <stdlib.h>
+#include <stddef.h>
+
+#if defined(__has_include)
+#if __has_include(<stdalign.h>)
+#include <stdalign.h>
+#endif
+#else
+#include <stdalign.h>
+#endif
+
+#ifndef alignof
+#define alignof _Alignof
+#endif
 
 #ifndef nullptr
 #if !defined(__cplusplus)

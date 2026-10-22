@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "defs.h"
 #include "ezgrpc2_arena_event.h"
 
 struct ezgrpc2_arena_event {

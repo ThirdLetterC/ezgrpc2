@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "defs.h"
 #include "ezgrpc2_message.h"
 #include "ezgrpc2_arena_message.h"
 

@@ -25,49 +25,49 @@ roadmap.o: roadmap.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 roadmap: roadmap.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) roadmap.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) roadmap.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 metadata.o: metadata.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 metadata: metadata.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) metadata.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) metadata.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 timeout.o: timeout.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 timeout: timeout.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) timeout.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) timeout.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 compression.o: compression.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 compression: compression.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) compression.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) compression.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 health.o: health.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 health: health.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) health.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) health.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 interceptor.o: interceptor.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 interceptor: interceptor.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) interceptor.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) interceptor.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 status_details.o: status_details.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 status_details: status_details.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) status_details.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) status_details.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 reflection.o: reflection.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 reflection: reflection.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) reflection.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) reflection.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 test_cert.pem test_key.pem:
 	openssl req -x509 -newkey rsa:2048 -nodes -keyout test_key.pem -out test_cert.pem -days 365 -subj "/CN=localhost" 2>/dev/null
@@ -76,7 +76,7 @@ tls.o: tls.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 tls: tls.o unity/unity.o ../libezgrpc2.a test_cert.pem test_key.pem
-	$(CC) $(CFLAGS) tls.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+	$(CC) $(CFLAGS) tls.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
 
 test_msg.pb-c.c test_msg.pb-c.h: test_msg.proto
 	protoc-c -I. --c_out=. $<
