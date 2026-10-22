@@ -11,3 +11,4 @@
 - [x] Middleware / Interceptor Pipeline (`ezgrpc2_server_add_interceptor`, pre/post hooks, `ezgrpc2_interceptor_create_bearer_auth`)
 - [x] Client Streaming & Bidirectional Streaming Patterns (`SayHelloClientStream`, `SayHelloBidiStream`, stream frame sequencing)
 - [x] Rich Error Model (`google.rpc.Status` with `Any` details serialized to `grpc-status-details-bin`, `ezgrpc2_status_details`)
+- [x] TLS / SSL Encryption & ALPN (`h2`) Negotiation (`OpenSSL`, `ezgrpc2_server_enable_tls`, `ezgrpc2_server_new_tls`, secure gRPC channels)

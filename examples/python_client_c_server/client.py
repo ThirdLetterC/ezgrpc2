@@ -14,18 +14,46 @@ Tests:
 """
 
 import sys
+import os
 import base64
 import grpc
 import helloworld_pb2
 import helloworld_pb2_grpc
 
 
+def create_channel(target):
+    use_tls = os.environ.get('USE_TLS', '0') == '1'
+    cert_path = os.environ.get('TLS_CERT', 'server.crt')
+    for arg in sys.argv[1:]:
+        if arg == '--tls':
+            use_tls = True
+        elif arg.startswith('--cert='):
+            cert_path = arg.split('=', 1)[1]
+
+    if use_tls:
+        print(f"[client] Using TLS channel with certificate '{cert_path}'...")
+        with open(cert_path, 'rb') as f:
+            root_certs = f.read()
+        creds = grpc.ssl_channel_credentials(root_certificates=root_certs)
+        channel_options = (
+            ('grpc.ssl_target_name_override', 'localhost'),
+            ('grpc.default_authority', 'localhost'),
+        )
+        return grpc.secure_channel(target, creds, options=channel_options)
+    else:
+        print("[client] Using insecure channel (h2c)...")
+        return grpc.insecure_channel(target)
+
+
 def main():
-    target = sys.argv[1] if len(sys.argv) > 1 else 'localhost:19009'
+    target = 'localhost:19009'
+    for arg in sys.argv[1:]:
+        if not arg.startswith('--'):
+            target = arg
+            break
     print(f"[client] Connecting to gRPC server at {target}...")
 
-    # Connect with an insecure channel (HTTP/2 cleartext / h2c)
-    with grpc.insecure_channel(target) as channel:
+    with create_channel(target) as channel:
         # Wait up to 5 seconds for channel connectivity
         grpc.channel_ready_future(channel).result(timeout=5)
         print("[client] Connected successfully!")

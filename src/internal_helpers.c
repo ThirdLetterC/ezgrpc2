@@ -13,6 +13,7 @@
 #include "internal_nghttp2_callbacks.h"
 #include "internal_helpers.h"
 #include "ezgrpc2_events_struct.h"
+#include "ezgrpc2_tls.h"
 
 #ifdef _WIN32
 int makenonblock(SOCKET sockfd) {
@@ -145,6 +146,10 @@ void session_free(ezgrpc2_session *ezsession) {
     stream_free(ezstream);
   ezgrpc2_list_free(ezsession->lstreams);
 
+  if (ezsession->is_tls) {
+    ezgrpc2_tls_session_free(ezsession);
+  }
+
   memset(ezsession, 0, sizeof(*ezsession));
 }
 
@@ -265,6 +270,12 @@ int session_create(
   uuid_generate_random(ezsession->session_uuid.uuid);
 #endif
 
+  if (server->is_tls) {
+    if (ezgrpc2_tls_session_init(ezsession) != 0) {
+      return 1;
+    }
+  }
+
   return res;
 }
 
@@ -311,6 +322,17 @@ int session_add(ezgrpc2_server *ezserver, int listenfd) {
 
 int session_events(ezgrpc2_session *ezsession) {
   int res;
+
+  if (ezsession->is_tls && !ezsession->tls_handshake_done) {
+    int hres = ezgrpc2_tls_handshake(ezsession);
+    if (hres == 0) {
+      return 0; // Handshake in progress
+    } else if (hres < 0) {
+      EZGRPC2_LOG_ERROR(ezsession->server, "TLS handshake failed on session %p\n", (void *)ezsession);
+      return 1;
+    }
+  }
+
   if (!nghttp2_session_want_read(ezsession->ngsession) &&
       !nghttp2_session_want_write(ezsession->ngsession))
     return 1;

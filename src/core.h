@@ -152,6 +152,10 @@ struct ezgrpc2_session {
    * about to receive a HEADERS frame */
   ezgrpc2_list *lstreams;
   size_t nb_streams;
+
+  struct ssl_st *ssl;
+  bool is_tls : 1;
+  bool tls_handshake_done : 1;
 };
 
 typedef struct ezgrpc2_interceptor ezgrpc2_interceptor;
@@ -201,6 +205,9 @@ struct ezgrpc2_server {
 
   size_t nb_interceptors;
   ezgrpc2_interceptor *interceptors;
+
+  struct ssl_ctx_st *ssl_ctx;
+  bool is_tls : 1;
 };
 
 #endif

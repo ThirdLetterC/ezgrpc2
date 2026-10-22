@@ -54,6 +54,7 @@ objects += ezgrpc2_session_info.o
 objects += ezgrpc2_session_uuid.o
 objects += ezgrpc2_status_details.o
 objects += ezgrpc2_timeout.o
+objects += ezgrpc2_tls.o
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
 ifeq ($(OS),Windows_NT)

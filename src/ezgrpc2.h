@@ -38,6 +38,7 @@
 #include "ezgrpc2_health.h"
 #include "ezgrpc2_interceptor.h"
 #include "ezgrpc2_reflection.h"
+#include "ezgrpc2_tls.h"
 #include "ezgrpc2_timeout.h"
 
 #if defined(EZGRPC2_ENABLE_PROTOBUF_C)

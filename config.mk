@@ -65,6 +65,16 @@ ifeq ($(ZLIB),1)
   LDFLAGS += -lz
 endif
 
+# OpenSSL TLS support:
+ifeq ($(origin OPENSSL), undefined)
+  OPENSSL := $(shell (pkg-config --exists openssl 2>/dev/null || test -f /usr/include/openssl/ssl.h) && echo 1 || echo 0)
+endif
+
+ifeq ($(OPENSSL),1)
+  CFLAGS += -DEZGRPC2_ENABLE_OPENSSL
+  LDFLAGS += -lssl -lcrypto
+endif
+
 CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)
 CFLAGS += -DCONFIG_IO_METHOD=$(CONFIG_IO_METHOD)
 CFLAGS += -DCONFIG_STREAM_MAX_HEADERS=$(CONFIG_STREAM_MAX_HEADERS)

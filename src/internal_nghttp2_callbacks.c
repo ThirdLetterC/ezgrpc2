@@ -8,6 +8,7 @@
 #include "ezgrpc2_grpc_status.h"
 #include "ezgrpc2_timeout.h"
 #include "ezgrpc2_compression.h"
+#include "ezgrpc2_tls.h"
 
 #include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
@@ -135,6 +136,13 @@ static ssize_t ngsend_callback([[maybe_unused]] nghttp2_session *session, const 
                                size_t length, [[maybe_unused]] int flags, void *user_data) {
   ezgrpc2_session *ezsession = user_data;
 
+  if (ezsession->is_tls) {
+    ssize_t ret = ezgrpc2_tls_write(ezsession, data, length);
+    if (ret == -2) return NGHTTP2_ERR_WOULDBLOCK;
+    if (ret <= 0) return NGHTTP2_ERR_CALLBACK_FAILURE;
+    return ret;
+  }
+
   EZSSIZE ret = send(ezsession->sockfd, data, length, 0);
   if (ret < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) return NGHTTP2_ERR_WOULDBLOCK;
@@ -150,6 +158,14 @@ static ssize_t ngsend_callback([[maybe_unused]] nghttp2_session *session, const 
 static ssize_t ngrecv_callback([[maybe_unused]] nghttp2_session *session, u8 *buf, size_t length,
                                [[maybe_unused]] int flags, void *user_data) {
   ezgrpc2_session *ezsession = user_data;
+
+  if (ezsession->is_tls) {
+    ssize_t ret = ezgrpc2_tls_read(ezsession, buf, length);
+    if (ret == -2) return NGHTTP2_ERR_WOULDBLOCK;
+    if (ret == 0) return NGHTTP2_ERR_EOF;
+    if (ret < 0) return NGHTTP2_ERR_CALLBACK_FAILURE;
+    return ret;
+  }
 
 #ifdef _WIN32
   int ret = recv(ezsession->sockfd, buf, length, 0);
@@ -233,7 +249,7 @@ static int on_header_callback([[maybe_unused]] nghttp2_session *session,
   if (!EZSTRCMP(method, name))
     ezstream->is_method_post = !EZSTRCMP("POST", value);
   else if (!EZSTRCMP(scheme, name))
-    ezstream->is_scheme_http = !EZSTRCMP("http", value);
+    ezstream->is_scheme_http = (!EZSTRCMP("http", value) || !EZSTRCMP("https", value));
   else if (!EZSTRCMP(path, name)) {
     for (size_t i = 0; i < ezsession->server->nb_paths; i++) 
       if (!EZSTRCMP(ezsession->server->paths[i].path, value)) {

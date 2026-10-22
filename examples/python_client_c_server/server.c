@@ -330,6 +330,9 @@ static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
 }
 
 int main(int argc, char *argv[]) {
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stderr, NULL, _IONBF, 0);
+
   int port = 19009;
   if (argc > 1) {
     port = atoi(argv[1]);
@@ -337,6 +340,23 @@ int main(int argc, char *argv[]) {
   }
   if (argc > 2) {
     g_quiet = atoi(argv[2]);
+  }
+
+  int use_tls = 0;
+  const char *cert_file = "server.crt";
+  const char *key_file = "server.key";
+
+  if (getenv("USE_TLS") != nullptr && atoi(getenv("USE_TLS")) != 0) {
+    use_tls = 1;
+  }
+  if (argc > 3) {
+    use_tls = atoi(argv[3]);
+  }
+  if (argc > 4) {
+    cert_file = argv[4];
+  }
+  if (argc > 5) {
+    key_file = argv[5];
   }
 
   signal(SIGPIPE, SIG_IGN);
@@ -358,7 +378,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  printf("[server] Greeter gRPC server listening on port %d (IPv4 & IPv6)...\n", port);
+  if (use_tls) {
+    if (ezgrpc2_server_enable_tls(server, cert_file, key_file) != 0) {
+      fprintf(stderr, "Failed to enable TLS on server (cert='%s', key='%s')\n", cert_file, key_file);
+      ezgrpc2_server_free(server);
+      return 1;
+    }
+    printf("[server] Greeter gRPC server listening on port %d (TLS/SSL enabled)...\n", port);
+  } else {
+    printf("[server] Greeter gRPC server listening on port %d (IPv4 & IPv6)...\n", port);
+  }
 
   /* Register service methods */
   (void)ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHello", &say_hello_handler, 0, 0);

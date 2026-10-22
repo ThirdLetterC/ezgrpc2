@@ -9,6 +9,7 @@
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_timeout.h"
+#include "ezgrpc2_tls.h"
 #include "internal_helpers.h"
 #define atlog(...) (void)0
 #define ezlog(...) (void)0
@@ -356,6 +357,10 @@ EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
   free(ezserver->ipv6_addr);
   free(ezserver->sessions);
   free(ezserver->interceptors);
+  if (ezserver->ssl_ctx != nullptr) {
+    ezgrpc2_tls_free_server_ctx(ezserver->ssl_ctx);
+    ezserver->ssl_ctx = nullptr;
+  }
   thpool_cleanup(&ezserver->logger_thread);
   free(ezserver);
 }

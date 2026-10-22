@@ -2,7 +2,9 @@
 
 CFLAGS += -I./unity -I..
 
-PROGS = list pthpool mem roadmap metadata timeout compression health interceptor status_details reflection
+EZGRPC2_LIBS = -L.. -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -luuid
+
+PROGS = list pthpool mem roadmap metadata timeout compression health interceptor status_details reflection tls
 
 ifeq ($(PROTOBUF_C),1)
   PROGS += pb
@@ -23,49 +25,58 @@ roadmap.o: roadmap.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 roadmap: roadmap.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) roadmap.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) roadmap.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 metadata.o: metadata.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 metadata: metadata.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) metadata.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) metadata.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 timeout.o: timeout.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 timeout: timeout.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) timeout.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) timeout.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 compression.o: compression.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 compression: compression.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) compression.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) compression.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 health.o: health.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 health: health.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) health.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) health.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 interceptor.o: interceptor.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 interceptor: interceptor.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) interceptor.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) interceptor.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 status_details.o: status_details.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 status_details: status_details.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) status_details.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) status_details.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 reflection.o: reflection.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
 reflection: reflection.o unity/unity.o ../libezgrpc2.a
-	$(CC) $(CFLAGS) reflection.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+	$(CC) $(CFLAGS) reflection.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
+
+test_cert.pem test_key.pem:
+	openssl req -x509 -newkey rsa:2048 -nodes -keyout test_key.pem -out test_cert.pem -days 365 -subj "/CN=localhost" 2>/dev/null
+
+tls.o: tls.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+tls: tls.o unity/unity.o ../libezgrpc2.a test_cert.pem test_key.pem
+	$(CC) $(CFLAGS) tls.o unity/unity.o $(LDFLAGS) $(EZGRPC2_LIBS) -o $@
 
 test_msg.pb-c.c test_msg.pb-c.h: test_msg.proto
 	protoc-c -I. --c_out=. $<
@@ -91,9 +102,10 @@ test: all
 	./interceptor
 	./status_details
 	./reflection
+	./tls
 ifeq ($(PROTOBUF_C),1)
 	./pb
 endif
 
 clean:
-	rm -f *.o list pthpool mem pb roadmap metadata timeout compression health interceptor status_details reflection test_msg.pb-c.c test_msg.pb-c.h
+	rm -f *.o list pthpool mem pb roadmap metadata timeout compression health interceptor status_details reflection tls test_msg.pb-c.c test_msg.pb-c.h test_cert.pem test_key.pem
