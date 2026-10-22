@@ -67,16 +67,22 @@ void test_allocator_basic_operations(void) {
   ezgrpc2_free(aligned);
 }
 
+#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
 static size_t g_mock_malloc_count = 0;
 static size_t g_mock_free_count = 0;
+#endif
 
 static void *mock_malloc(size_t size) {
+#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
   g_mock_malloc_count++;
+#endif
   return malloc(size);
 }
 
 static void mock_free(void *ptr) {
+#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
   g_mock_free_count++;
+#endif
   free(ptr);
 }
 

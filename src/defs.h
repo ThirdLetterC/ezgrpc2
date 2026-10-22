@@ -3,6 +3,14 @@
 
 #include <stdlib.h>
 
+#ifndef nullptr
+#if !defined(__cplusplus)
+#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
+#define nullptr ((void *)0)
+#endif
+#endif
+#endif
+
 #define REALIGN(alignment, size) (((size) + ((alignment) - 1)) & ~((alignment) - 1))
 
 #ifdef __ANDROID__

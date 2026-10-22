@@ -87,6 +87,12 @@ CFLAGS += -Wall $(C_STD) -pedantic
 CFLAGS += -D_GNU_SOURCE
 CFLAGS += -D_FORTIFY_SOURCE=2
 
+# Ensure nullptr is supported across all compilers (e.g. older clang/gcc with -std=c2x)
+HAS_NULLPTR := $(shell printf "int main(void){void *p = nullptr; (void)p; return 0;}\n" | $(CC) $(C_STD) -x c - >/dev/null 2>&1 && echo 1 || echo 0)
+ifeq ($(HAS_NULLPTR),0)
+  CFLAGS += -Dnullptr="((void*)0)"
+endif
+
 ifneq ($(wildcard $(HOME)/.local/lib),)
   LDFLAGS += -L$(HOME)/.local/lib -Wl,-rpath,$(HOME)/.local/lib
 endif

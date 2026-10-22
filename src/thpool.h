@@ -5,6 +5,7 @@
 #ifndef THPOOL_H
 #define THPOOL_H
 #include <time.h>
+#include "defs.h"
 #include "ezgrpc2_list.h"
 
 typedef struct thpool thpool;

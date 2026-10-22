@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include "defs.h"
 
 typedef char i8;
 typedef uint8_t u8;
