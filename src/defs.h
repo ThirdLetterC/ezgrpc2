@@ -13,7 +13,9 @@
 #endif
 
 #ifndef alignof
+#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
 #define alignof _Alignof
+#endif
 #endif
 
 #ifndef nullptr
@@ -53,10 +55,6 @@ static inline void *aligned_alloc(size_t alignment, size_t size){
 
 #ifndef CONFIG_PATH_MAX_LEN
 #define CONFIG_PATH_MAX_LEN 32
-#endif
-
-#ifndef CONFIG_IO_METHOD
-#define CONFIG_IO_METHOD 0
 #endif
 
 #ifndef CONFIG_STREAM_MAX_HEADERS

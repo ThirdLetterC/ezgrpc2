@@ -57,9 +57,6 @@ objects += ezgrpc2_timeout.o
 objects += ezgrpc2_tls.o
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
-ifeq ($(OS),Windows_NT)
-  objects += wepoll.o
-endif
 #targets += examples/hello_worldcpp.bin
 
 all: $(targets)
@@ -68,10 +65,10 @@ libezgrpc2.a : $(objects)
 	$(Q)$(AR) rcs $@ $^
 
 libezgrpc2.so : $(objects)
-	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -o $@
+	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -luv -o $@
 
 libezgrpc2.dll : $(objects)
-	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -o $@
+	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -luv -o $@
 
 %.o : %.c
 	$(CC) -c $(CFLAGS) $< -o $@

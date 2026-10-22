@@ -46,6 +46,7 @@ jobs:
             libprotobuf-c-dev \
             protobuf-c-compiler \
             protobuf-compiler \
+            libuv1-dev \
             libmimalloc-dev \
             libjemalloc-dev
 
@@ -100,7 +101,8 @@ jobs:
             uuid-dev \
             libprotobuf-c-dev \
             protobuf-c-compiler \
-            protobuf-compiler
+            protobuf-compiler \
+            libuv1-dev
 
       - name: Install Python dependencies
         run: |

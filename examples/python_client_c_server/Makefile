@@ -1,7 +1,7 @@
 -include ../../config.mk
 
 CFLAGS += -I../../src
-LDFLAGS += -L../../src -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -lprotobuf-c
+LDFLAGS += -L../../src -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -lprotobuf-c -luv
 
 ifeq ($(OS),Windows_NT)
   LDFLAGS += -lWs2_32 -lRpcrt4

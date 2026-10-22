@@ -2,9 +2,6 @@ CC ?= gcc
 AR ?= ar
 CXX ?= g++
 
-# 0: poll
-# 1: epoll
-CONFIG_IO_METHOD ?= 0
 CONFIG_PATH_MAX_LEN = 64
 CONFIG_STREAM_MAX_HEADERS = 32
 CONFIG_CACHE_LINE_SIZE = 64
@@ -65,6 +62,13 @@ ifeq ($(ZLIB),1)
   LDFLAGS += -lz
 endif
 
+# Libuv event loop:
+LIBUV_CFLAGS ?= $(shell pkg-config --cflags libuv 2>/dev/null)
+LIBUV_LIBS ?= $(shell pkg-config --libs libuv 2>/dev/null || echo "-luv")
+
+CFLAGS += $(LIBUV_CFLAGS)
+LDFLAGS += $(LIBUV_LIBS)
+
 # OpenSSL TLS support:
 ifeq ($(origin OPENSSL), undefined)
   OPENSSL := $(shell (pkg-config --exists openssl 2>/dev/null || test -f /usr/include/openssl/ssl.h) && echo 1 || echo 0)
@@ -76,7 +80,6 @@ ifeq ($(OPENSSL),1)
 endif
 
 CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)
-CFLAGS += -DCONFIG_IO_METHOD=$(CONFIG_IO_METHOD)
 CFLAGS += -DCONFIG_STREAM_MAX_HEADERS=$(CONFIG_STREAM_MAX_HEADERS)
 CFLAGS += -DCONFIG_CACHE_LINE_SIZE=$(CONFIG_CACHE_LINE_SIZE)
 

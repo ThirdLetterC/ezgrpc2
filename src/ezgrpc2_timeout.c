@@ -82,9 +82,9 @@ EZGRPC2_API void ezgrpc2_server_check_deadlines(ezgrpc2_server *server) {
   }
   uint64_t now_ms = ezgrpc2_time_now_ms();
 
-  for (size_t i = 2; i < server->nb_sessions; i++) {
+  for (size_t i = 0; i < server->nb_sessions; i++) {
     ezgrpc2_session *session = &server->sessions[i];
-    if (session->ngsession == nullptr || session->lstreams == nullptr) {
+    if (!session->is_active || session->is_closing || session->ngsession == nullptr || session->lstreams == nullptr) {
       continue;
     }
 

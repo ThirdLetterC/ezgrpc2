@@ -20,8 +20,8 @@ EZGRPC2_API ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *s
   ezgrpc2_list *lsession_info = ezgrpc2_list_new(nullptr);
   assert(lsession_info != nullptr);
 
-  for (EZNFDS i = 2; i < server->nb_fds; i++) {
-    if (server->fds[i].fd == -1)
+  for (size_t i = 0; i < server->nb_sessions; i++) {
+    if (!server->sessions[i].is_active || server->sessions[i].is_closing)
       continue;
     ezgrpc2_session_info *session_info = session_info_new(nullptr);
     ezgrpc2_list_push_back(lsession_info, session_info);
@@ -175,88 +175,108 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
           server->ipv6_port);
   }
 
-  server->nb_sessions = server->server_settings.max_connections + 2;
-  server->sessions = calloc(server->nb_sessions, sizeof(*server->sessions));
-
-  server->nb_fds = server->server_settings.max_connections + 2;
-  server->fds = calloc(server->nb_fds, sizeof(*(server->fds)));
-  if (server->fds == nullptr)
+  int uv_res = uv_loop_init(&server->loop);
+  if (uv_res != 0) {
+    perror("uv_loop_init");
     goto err;
+  }
+  server->loop_initialized = true;
+
+  uv_res = uv_timer_init(&server->loop, &server->timer);
+  if (uv_res != 0) {
+    perror("uv_timer_init");
+    goto err;
+  }
+  server->timer_active = true;
+
+  server->ipv4_sockfd = ipv4_sockfd;
+  server->ipv6_sockfd = ipv6_sockfd;
+
+  if (ipv4_sockfd != EZINVALID_SOCKET) {
+    uv_res = uv_poll_init_socket(&server->loop, &server->ipv4_poll, ipv4_sockfd);
+    if (uv_res != 0) {
+      perror("uv_poll_init_socket ipv4");
+      goto err;
+    }
+    server->ipv4_poll.data = server;
+    server->ipv4_poll_active = true;
+    uv_res = uv_poll_start(&server->ipv4_poll, UV_READABLE, on_listen_poll);
+    if (uv_res != 0) {
+      perror("uv_poll_start ipv4");
+      goto err;
+    }
+  }
+
+  if (ipv6_sockfd != EZINVALID_SOCKET) {
+    uv_res = uv_poll_init_socket(&server->loop, &server->ipv6_poll, ipv6_sockfd);
+    if (uv_res != 0) {
+      perror("uv_poll_init_socket ipv6");
+      goto err;
+    }
+    server->ipv6_poll.data = server;
+    server->ipv6_poll_active = true;
+    uv_res = uv_poll_start(&server->ipv6_poll, UV_READABLE, on_listen_poll);
+    if (uv_res != 0) {
+      perror("uv_poll_start ipv6");
+      goto err;
+    }
+  }
+
+  server->nb_sessions = server->server_settings.max_connections;
+  server->sessions = calloc(server->nb_sessions, sizeof(*server->sessions));
+  if (server->sessions == nullptr)
+    goto err;
+
   server->paths = calloc(server->http2_settings.max_paths, sizeof(*server->paths));
   if (server->paths == nullptr)
     goto err;
 
-  server->fds[0].fd = ipv4_sockfd;
-  server->fds[0].events = POLLIN | POLLRDHUP;
-  server->fds[1].fd = ipv6_sockfd;
-  server->fds[1].events = POLLIN | POLLRDHUP;
-
-  for (EZNFDS i = 2; i < server->nb_fds; i++) {
-    server->fds[i].fd = -1;
-  }
-
   return server;
 
 err:
-  if (ipv4_sockfd != EZINVALID_SOCKET)
+  if (server->ipv4_sockfd != EZINVALID_SOCKET) {
+    close(server->ipv4_sockfd);
+    server->ipv4_sockfd = EZINVALID_SOCKET;
+  } else if (ipv4_sockfd != EZINVALID_SOCKET) {
     close(ipv4_sockfd);
-  if (ipv6_sockfd != EZINVALID_SOCKET)
+  }
+  if (server->ipv6_sockfd != EZINVALID_SOCKET) {
+    close(server->ipv6_sockfd);
+    server->ipv6_sockfd = EZINVALID_SOCKET;
+  } else if (ipv6_sockfd != EZINVALID_SOCKET) {
     close(ipv6_sockfd);
+  }
   ezgrpc2_server_free(server);
   return nullptr;
+}
+
+static void on_poll_timer(uv_timer_t *handle) {
+  (void)handle;
 }
 
 EZGRPC2_API int ezgrpc2_server_poll(
   ezgrpc2_server *server,
   ezgrpc2_events *events,
   int timeout) {
-  assert(events != nullptr);
-  struct pollfd *fds = server->fds;
-
-#ifdef _WIN32
-  const ULONG nb_fds = server->nb_fds;
-  const int ready = WSAPoll(fds, nb_fds, timeout);
-#else
-  const nfds_t nb_fds = server->nb_fds;
-  const int ready = poll(fds, nb_fds, timeout);
-#endif
+  if (server == nullptr)
+    return -1;
 
   server->events = events;
-  ezgrpc2_server_check_deadlines(server);
+  server->ready_events = 0;
 
-  if (ready <= 0)
-    return ready;
-
-  // add ipv4 session
-  if (fds[0].revents & POLLIN)
-    session_add(server, fds[0].fd);
-  // add ipv6 session
-  if (fds[1].revents & POLLIN)
-    session_add(server, fds[1].fd);
-
-  for (EZNFDS i = 2; i < nb_fds; i++) {
-    if (fds[i].fd != -1 && (fds[i].revents & (POLLRDHUP | POLLERR))) {
-      ezlog("c hangup\n");
-      session_free(&server->sessions[i]);
-      fds[i].fd = -1;
-      fds[i].revents = 0;
-      continue;
-    }
-    if (fds[i].fd != -1 && (fds[i].revents & POLLIN)) {
-      server->sessions[i].server = server;
-      if (session_events(&server->sessions[i])) {
-        EZGRPC2_LOG_TRACE(server, "closing session %p", (void*) &server->sessions[i]);
-        if (close(server->sessions[i].sockfd)) {
-          EZGRPC2_LOG_ERROR(server, "close: %s", strerror(errno));
-        }
-        fds[i].fd = -1;
-        session_free(&server->sessions[i]);
-      }
-      fds[i].revents = 0;
-    }
+  if (timeout > 0) {
+    uv_timer_start(&server->timer, on_poll_timer, (uint64_t)timeout, 0);
+    uv_run(&server->loop, UV_RUN_ONCE);
+    uv_timer_stop(&server->timer);
+  } else if (timeout == 0) {
+    uv_run(&server->loop, UV_RUN_NOWAIT);
+  } else {
+    uv_run(&server->loop, UV_RUN_ONCE);
   }
 
-  return ready;
+  ezgrpc2_server_check_deadlines(server);
+
+  return server->ready_events;
 }
 
 EZGRPC2_API ezgrpc2_event *ezgrpc2_server_events_read([[maybe_unused]] ezgrpc2_server *server) {
@@ -266,49 +286,7 @@ EZGRPC2_API ezgrpc2_event *ezgrpc2_server_events_read([[maybe_unused]] ezgrpc2_s
 EZGRPC2_API int ezgrpc2_server_events_poll(
   ezgrpc2_server *server,
   int timeout) {
-  struct pollfd *fds = server->fds;
-
-#ifdef _WIN32
-  const ULONG nb_fds = server->nb_fds;
-  const int ready = WSAPoll(fds, nb_fds, timeout);
-#else
-  const nfds_t nb_fds = server->nb_fds;
-  const int ready = poll(fds, nb_fds, timeout);
-#endif
-
-  if (ready <= 0)
-    return ready;
-
-  // add ipv4 session
-  if (fds[0].revents & POLLIN)
-    session_add(server, fds[0].fd);
-  // add ipv6 session
-  if (fds[1].revents & POLLIN)
-    session_add(server, fds[1].fd);
-
-  for (EZNFDS i = 2; i < nb_fds; i++) {
-    if (fds[i].fd != -1 && (fds[i].revents & (POLLRDHUP | POLLERR))) {
-      ezlog("c hangup\n");
-      session_free(&server->sessions[i]);
-      fds[i].fd = -1;
-      fds[i].revents = 0;
-      continue;
-    }
-    if (fds[i].fd != -1 && (fds[i].revents & POLLIN)) {
-      server->sessions[i].server = server;
-      if (session_events(&server->sessions[i])) {
-        EZGRPC2_LOG_TRACE(server, "closing session %p", (void*) &server->sessions[i]);
-        if (close(server->sessions[i].sockfd)) {
-          EZGRPC2_LOG_ERROR(server, "close: %s", strerror(errno));
-        }
-        fds[i].fd = -1;
-        session_free(&server->sessions[i]);
-      }
-      fds[i].revents = 0;
-    }
-  }
-
-  return ready;
+  return ezgrpc2_server_poll(server, nullptr, timeout);
 }
 
 EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path, void *userdata, uint64_t accept_content_type, uint64_t accept_content_encoding) {
@@ -338,20 +316,49 @@ EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, const c
 EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
   if (ezserver == nullptr)
     return;
-  for (EZNFDS i = 0; i < 2; i++) {
-    if (ezserver->fds != nullptr && ezserver->fds[i].fd != -1) {
-      close(ezserver->fds[i].fd);
+
+  if (ezserver->ipv4_poll_active) {
+    uv_poll_stop(&ezserver->ipv4_poll);
+    uv_close((uv_handle_t *)&ezserver->ipv4_poll, nullptr);
+    ezserver->ipv4_poll_active = false;
+  }
+  if (ezserver->ipv6_poll_active) {
+    uv_poll_stop(&ezserver->ipv6_poll);
+    uv_close((uv_handle_t *)&ezserver->ipv6_poll, nullptr);
+    ezserver->ipv6_poll_active = false;
+  }
+  if (ezserver->timer_active) {
+    uv_timer_stop(&ezserver->timer);
+    uv_close((uv_handle_t *)&ezserver->timer, nullptr);
+    ezserver->timer_active = false;
+  }
+
+  if (ezserver->ipv4_sockfd != EZINVALID_SOCKET) {
+    close(ezserver->ipv4_sockfd);
+    ezserver->ipv4_sockfd = EZINVALID_SOCKET;
+  }
+  if (ezserver->ipv6_sockfd != EZINVALID_SOCKET) {
+    close(ezserver->ipv6_sockfd);
+    ezserver->ipv6_sockfd = EZINVALID_SOCKET;
+  }
+
+  if (ezserver->sessions != nullptr) {
+    for (size_t i = 0; i < ezserver->nb_sessions; i++) {
+      if (ezserver->sessions[i].is_active || ezserver->sessions[i].is_closing) {
+        session_close_and_free(&ezserver->sessions[i]);
+      }
     }
   }
 
-  for (EZNFDS i = 2; i < ezserver->nb_fds; i++) {
-    if (ezserver->fds != nullptr && ezserver->fds[i].fd != -1) {
-      shutdown(ezserver->fds[i].fd, SHUT_RDWR);
-      close(ezserver->fds[i].fd);
-      session_free(&ezserver->sessions[i]);
+  if (ezserver->loop_initialized) {
+    int drain_limit = 1000;
+    while (uv_loop_alive(&ezserver->loop) && drain_limit-- > 0) {
+      uv_run(&ezserver->loop, UV_RUN_NOWAIT);
     }
+    uv_loop_close(&ezserver->loop);
+    ezserver->loop_initialized = false;
   }
-  free(ezserver->fds);
+
   free(ezserver->paths);
   free(ezserver->ipv4_addr);
   free(ezserver->ipv6_addr);

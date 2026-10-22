@@ -125,37 +125,83 @@ void ezflog(FILE *fp, const char *fmt, ...) {
   va_end(args);
 }
 
-EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds) {
-  for (EZNFDS i = 2; i < nb_fds; i++)
-    if (fds[i].fd == -1)
+size_t get_unused_session_ndx(ezgrpc2_server *server) {
+  for (size_t i = 0; i < server->nb_sessions; i++)
+    if (!server->sessions[i].is_active && !server->sessions[i].is_closing)
       return i;
-  return (EZNFDS)-1;
+  return (size_t)-1;
 }
 
 void session_free(ezgrpc2_session *ezsession) {
-  ezgrpc2_event event = {};
-  event.session_uuid = ezsession->session_uuid;
-  event.type = EZGRPC2_EVENT_DISCONNECT;
-  ezgrpc2_events_write(ezsession->server->events, event);
+  if (ezsession == nullptr)
+    return;
 
-  nghttp2_session_terminate_session(ezsession->ngsession, 0);
-  nghttp2_session_del(ezsession->ngsession);
+  if (ezsession->is_active && ezsession->server && ezsession->server->events) {
+    ezgrpc2_event event = {};
+    event.session_uuid = ezsession->session_uuid;
+    event.type = EZGRPC2_EVENT_DISCONNECT;
+    ezgrpc2_events_write(ezsession->server->events, event);
+  }
 
-  ezgrpc2_stream *ezstream;
-  while ((ezstream = ezgrpc2_list_pop_front(ezsession->lstreams)) != nullptr)
-    stream_free(ezstream);
-  ezgrpc2_list_free(ezsession->lstreams);
+  if (ezsession->ngsession != nullptr) {
+    nghttp2_session_terminate_session(ezsession->ngsession, 0);
+    nghttp2_session_del(ezsession->ngsession);
+    ezsession->ngsession = nullptr;
+  }
+
+  if (ezsession->lstreams != nullptr) {
+    ezgrpc2_stream *ezstream;
+    while ((ezstream = ezgrpc2_list_pop_front(ezsession->lstreams)) != nullptr)
+      stream_free(ezstream);
+    ezgrpc2_list_free(ezsession->lstreams);
+    ezsession->lstreams = nullptr;
+  }
 
   if (ezsession->is_tls) {
     ezgrpc2_tls_session_free(ezsession);
+    ezsession->is_tls = false;
   }
 
-  memset(ezsession, 0, sizeof(*ezsession));
+  ezsession->sockfd = EZINVALID_SOCKET;
+  ezsession->nb_streams = 0;
+  ezsession->tls_handshake_done = false;
+  memset(&ezsession->session_uuid, 0, sizeof(ezsession->session_uuid));
+  memset(&ezsession->sockaddr, 0, sizeof(ezsession->sockaddr));
+  memset(ezsession->client_addr, 0, sizeof(ezsession->client_addr));
+  ezsession->client_port = 0;
+}
+
+static void on_session_poll_close(uv_handle_t *handle) {
+  ezgrpc2_session *session = (ezgrpc2_session *)handle->data;
+  if (session != nullptr) {
+    session->is_closing = false;
+    session->is_active = false;
+  }
+}
+
+void session_close_and_free(ezgrpc2_session *session) {
+  if (session == nullptr || !session->is_active || session->is_closing) {
+    return;
+  }
+  session->is_closing = true;
+
+  uv_poll_stop(&session->poll_handle);
+  if (session->sockfd != EZINVALID_SOCKET) {
+    shutdown(session->sockfd, SHUT_RDWR);
+    close(session->sockfd);
+    session->sockfd = EZINVALID_SOCKET;
+  }
+  session_free(session);
+  uv_close((uv_handle_t *)&session->poll_handle, on_session_poll_close);
 }
 
 ezgrpc2_session *session_find(ezgrpc2_session *sessions, size_t nb_sessions, ezgrpc2_session_uuid session_uuid) {
-  assert(session_uuid.index < nb_sessions);
-  return ezgrpc2_session_uuid_is_equal(session_uuid, sessions[session_uuid.index].session_uuid) ? sessions + session_uuid.index: nullptr;
+  if (session_uuid.index >= nb_sessions)
+    return nullptr;
+  ezgrpc2_session *s = &sessions[session_uuid.index];
+  if (!s->is_active || s->is_closing)
+    return nullptr;
+  return ezgrpc2_session_uuid_is_equal(session_uuid, s->session_uuid) ? s : nullptr;
 }
 
 static void *nghttp2_mem_malloc(size_t size, [[maybe_unused]] void *user_data) {
@@ -279,45 +325,101 @@ int session_create(
   return res;
 }
 
-int session_add(ezgrpc2_server *ezserver, int listenfd) {
-  struct sockaddr_storage sockaddr;
-  struct pollfd *fds = ezserver->fds;
-  EZNFDS nb_fds = ezserver->nb_fds;
-  EZSOCKLEN sockaddr_len;
+void on_session_poll(uv_poll_t *handle, int status, int events) {
+  ezgrpc2_session *session = (ezgrpc2_session *)handle->data;
+  if (session == nullptr || !session->is_active || session->is_closing) {
+    return;
+  }
+  ezgrpc2_server *server = session->server;
+  server->ready_events++;
 
-  sockaddr_len = sizeof(sockaddr);
+  if (events & UV_READABLE) {
+    if (session_events(session)) {
+      EZGRPC2_LOG_TRACE(server, "closing session %p", (void *)session);
+      session_close_and_free(session);
+      return;
+    }
+  }
+
+  if (status < 0 || (events & UV_DISCONNECT)) {
+    session_close_and_free(session);
+    return;
+  }
+}
+
+int session_add(ezgrpc2_server *ezserver, EZSOCKET listenfd) {
+  struct sockaddr_storage sockaddr;
+  EZSOCKLEN sockaddr_len = sizeof(sockaddr);
   memset(&sockaddr, 0, sizeof(sockaddr));
-  int confd = accept(listenfd, (struct sockaddr *)&sockaddr, &sockaddr_len);
-  if (confd == -1) {
-    EZGRPC2_LOG_ERROR(ezserver, "accept: %s", strerror(errno));
+  EZSOCKET confd;
+  while ((confd = accept(listenfd, (struct sockaddr *)&sockaddr, &sockaddr_len)) == EZINVALID_SOCKET && errno == EINTR);
+  if (confd == EZINVALID_SOCKET) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+      EZGRPC2_LOG_ERROR(ezserver, "accept: %s", strerror(errno));
+    }
     return 1;
   }
 
   EZGRPC2_LOG_NORMAL(ezserver, "incoming %s connection\n", sockaddr.ss_family == AF_INET ? "ipv4" : "ipv6");
 
-  EZNFDS ndx = get_unused_pollfd_ndx(fds, nb_fds);
-  if (ndx == (EZNFDS)-1) {
+  size_t ndx = get_unused_session_ndx(ezserver);
+  if (ndx == (size_t)-1) {
     EZGRPC2_LOG_ERROR(ezserver, "@ %s: max client reached", __func__);
     shutdown(confd, SHUT_RDWR);
     close(confd);
     return 1;
   }
 
-  if (session_create(&ezserver->sessions[ndx], confd, &sockaddr, sockaddr_len, ezserver)) {
+  ezgrpc2_session *session = &ezserver->sessions[ndx];
+  if (session_create(session, confd, &sockaddr, sockaddr_len, ezserver)) {
     EZGRPC2_LOG_ERROR(ezserver, "@ %s: session_create failed", __func__);
+    session_free(session);
     shutdown(confd, SHUT_RDWR);
     close(confd);
     return 1;
   }
-  ezserver->sessions[ndx].session_uuid.index = ndx;
-  ezgrpc2_event event = {};
-  event.type = EZGRPC2_EVENT_CONNECT;
-  event.session_uuid = ezserver->sessions[ndx].session_uuid;
-  ezgrpc2_events_write(ezserver->events, event);
+  session->session_uuid.index = ndx;
+  session->is_active = true;
+  session->is_closing = false;
 
-  fds[ndx].fd = confd;
-  fds[ndx].events = POLLIN | POLLRDHUP;
+  int uv_res = uv_poll_init_socket(&ezserver->loop, &session->poll_handle, confd);
+  if (uv_res != 0) {
+    session_free(session);
+    close(confd);
+    session->is_active = false;
+    return 1;
+  }
+  session->poll_handle.data = session;
+
+  uv_res = uv_poll_start(&session->poll_handle, UV_READABLE | UV_DISCONNECT, on_session_poll);
+  if (uv_res != 0) {
+    session_close_and_free(session);
+    return 1;
+  }
+
+  if (ezserver->events != nullptr) {
+    ezgrpc2_event event = {};
+    event.type = EZGRPC2_EVENT_CONNECT;
+    event.session_uuid = session->session_uuid;
+    ezgrpc2_events_write(ezserver->events, event);
+  }
+
   return 0;
+}
+
+void on_listen_poll(uv_poll_t *handle, int status, int events) {
+  (void)events;
+  if (status < 0) {
+    return;
+  }
+  ezgrpc2_server *server = (ezgrpc2_server *)handle->data;
+  uv_os_sock_t fd;
+  if (uv_fileno((uv_handle_t *)handle, &fd) != 0) {
+    return;
+  }
+  while (session_add(server, (EZSOCKET)fd) == 0) {
+    server->ready_events++;
+  }
 }
 
 int session_events(ezgrpc2_session *ezsession) {

@@ -2,7 +2,7 @@
 
 CFLAGS += -I./unity -I..
 
-EZGRPC2_LIBS = -L.. -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -luuid
+EZGRPC2_LIBS = -L.. -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -luuid -luv
 
 PROGS = list pthpool mem roadmap metadata timeout compression health interceptor status_details reflection tls
 

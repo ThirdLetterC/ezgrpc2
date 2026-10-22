@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <uv.h>
 #include <nghttp2/nghttp2.h>
 
 #include "thpool.h"
@@ -21,16 +22,12 @@
 #  include <windows.h>
 #  include <Rpc.h>
 
-#  include "wepoll.h"
 #  define ssize_t int
 #  define SHUT_RDWR SD_BOTH
-#  define POLLRDHUP 0
 
 /* winsock send/recv returns int instead of ssize_t */
 #define EZSSIZE           int
 #define EZSOCKET          SOCKET
-#define EZPOLL            WSAPoll
-#define EZNFDS            ULONG
 #define EZINVALID_SOCKET  INVALID_SOCKET
 #define EZSOCKET_ERROR    SOCKET_ERROR
 #define EZSOCKLEN         int
@@ -40,7 +37,6 @@
 #  include <byteswap.h>
 #  include <fcntl.h>
 #  include <netdb.h>
-#  include <poll.h>
 #  include <netinet/in.h>
 #  include <netinet/tcp.h>
 #  include <sys/socket.h>
@@ -48,8 +44,6 @@
 
 #define EZSSIZE           ssize_t
 #define EZSOCKET          int
-#define EZPOLL            poll
-#define EZNFDS            nfds_t
 #define EZINVALID_SOCKET  (-1)
 #define EZSOCKET_ERROR    (-1)
 #define EZSOCKLEN         socklen_t
@@ -156,6 +150,10 @@ struct ezgrpc2_session {
   struct ssl_st *ssl;
   bool is_tls : 1;
   bool tls_handshake_done : 1;
+
+  uv_poll_t poll_handle;
+  bool is_active : 1;
+  bool is_closing : 1;
 };
 
 typedef struct ezgrpc2_interceptor ezgrpc2_interceptor;
@@ -168,13 +166,8 @@ struct ezgrpc2_server {
   ezgrpc2_path *paths;
   pthread_mutex_t mutex;
 
-
-
   nghttp2_session *ngsession;
   ezgrpc2_events *events;
-//  ezgrpc2_list *lmessages;
-//  ezgrpc2_arena_event *arena_events;
-//  ezgrpc2_arena_message *arena_messages;
 
   u16 ipv4_port;
   u16 ipv6_port;
@@ -183,22 +176,20 @@ struct ezgrpc2_server {
   char *ipv4_addr;
   char *ipv6_addr;
 
-#ifdef _WIN32
-  ULONG nb_fds;
-#else
-  nfds_t nb_fds;
-#endif
+  EZSOCKET ipv4_sockfd;
+  EZSOCKET ipv6_sockfd;
 
-#if CONFIG_IO_METHOD == 0
-  /* fds[0] reserve for ipv4 listen sockfd */
-  /* fds[1] reserve for ipv6 listen sockfd */
-  /* the rest are for client use */
-  struct pollfd *fds;
-#elif CONFIG_IO_METHOD == 1
-  int epollfd;
-#else
-#error "invalid CONFIG_IO_METHOD value"
-#endif
+  uv_loop_t loop;
+  uv_poll_t ipv4_poll;
+  uv_poll_t ipv6_poll;
+  uv_timer_t timer;
+
+  bool loop_initialized : 1;
+  bool ipv4_poll_active : 1;
+  bool ipv6_poll_active : 1;
+  bool timer_active : 1;
+
+  int ready_events;
 
   size_t nb_sessions;
   ezgrpc2_session *sessions;
