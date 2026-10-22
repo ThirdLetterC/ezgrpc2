@@ -106,7 +106,10 @@ EZGRPC2_API void ezgrpc2_server_free(
 
 ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server);
 
-ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server, ezgrpc2_session_uuid *restrict session_uuid);
+EZGRPC2_API ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server, ezgrpc2_session_uuid *restrict session_uuid);
+
+EZGRPC2_API ezgrpc2_server_settings *ezgrpc2_server_get_server_settings(ezgrpc2_server *server);
+EZGRPC2_API ezgrpc2_http2_settings *ezgrpc2_server_get_http2_settings(ezgrpc2_server *server);
 
 EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level, const char *restrict fmt, ...);
 

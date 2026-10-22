@@ -15,6 +15,7 @@ src/tests/list
 src/tests/pthpool
 src/tests/mem
 src/tests/pb
+src/tests/roadmap
 src/tests/*.pb-c.*
 *.pb-c.*
 *_pb2.py

@@ -2,7 +2,7 @@
 
 CFLAGS += -I./unity -I..
 
-PROGS = list pthpool mem
+PROGS = list pthpool mem roadmap
 
 ifeq ($(PROTOBUF_C),1)
   PROGS += pb
@@ -18,6 +18,12 @@ pthpool: ../ezgrpc2_pthpool.o ../ezgrpc2_list.o ../ezgrpc2_mem.o pthpool.o
 
 mem: ../ezgrpc2_mem.o mem.o unity/unity.o
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+
+roadmap.o: roadmap.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+roadmap: roadmap.o unity/unity.o ../libezgrpc2.a
+	$(CC) $(CFLAGS) roadmap.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lpthread -luuid -o $@
 
 test_msg.pb-c.c test_msg.pb-c.h: test_msg.proto
 	protoc-c -I. --c_out=. $<
@@ -35,9 +41,10 @@ test: all
 	./list
 	./pthpool
 	./mem
+	./roadmap
 ifeq ($(PROTOBUF_C),1)
 	./pb
 endif
 
 clean:
-	rm -f *.o list pthpool mem pb test_msg.pb-c.c test_msg.pb-c.h
+	rm -f *.o list pthpool mem pb roadmap test_msg.pb-c.c test_msg.pb-c.h

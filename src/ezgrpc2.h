@@ -14,6 +14,9 @@
 #define EZGRPC2_API __attribute__((visibility("default")))
 #endif
 
+#include "ezgrpc2_list.h"
+#include "ezgrpc2_list_message.h"
+#include "ezgrpc2_list_event.h"
 #include "ezgrpc2_arena_event.h"
 #include "ezgrpc2_arena_message.h"
 #include "ezgrpc2_event.h"

@@ -396,3 +396,11 @@ void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level, const char *
   thpool_add_task(&server->logger_thread, logger, l, log_free); 
   va_end(ap);
 }
+
+EZGRPC2_API ezgrpc2_server_settings *ezgrpc2_server_get_server_settings(ezgrpc2_server *server) {
+  return server ? &server->server_settings : nullptr;
+}
+
+EZGRPC2_API ezgrpc2_http2_settings *ezgrpc2_server_get_http2_settings(ezgrpc2_server *server) {
+  return server ? &server->http2_settings : nullptr;
+}
