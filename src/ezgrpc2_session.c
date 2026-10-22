@@ -60,7 +60,7 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
   ezgrpc2_list *lmessages = (ezgrpc2_list*)messages;
   int res;
   ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == nullptr) {
+  if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
   }
   ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
@@ -99,7 +99,7 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end2(
   const ezgrpc2_metadata_entry *trailers,
   size_t nb_trailers) {
   ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == nullptr) {
+  if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
   }
 
@@ -157,7 +157,7 @@ EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
     return 1;
   }
   ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == nullptr) {
+  if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
   }
   ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
@@ -182,7 +182,7 @@ EZGRPC2_API int ezgrpc2_server_session_end(
   i32 last_stream_id,
   int error_code) {
   ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
-  if (ezsession == nullptr) {
+  if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     /* session doesn't exist */
     return 1;
   }

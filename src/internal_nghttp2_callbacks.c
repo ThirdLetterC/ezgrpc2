@@ -41,7 +41,6 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_messages **mess
       return lseek;
     }
 
-    lseek = seek;
     if (*messages == nullptr)
       *messages = ezgrpc2_messages_new(nullptr);
     ezgrpc2_message *msg = nullptr;
@@ -60,6 +59,7 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_messages **mess
     assert(msg != nullptr);
     ezgrpc2_messages_push(*messages, msg);
     seek += msg_len;
+    lseek = seek;
   }
 
   return lseek;

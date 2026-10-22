@@ -8,8 +8,14 @@ service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply);
   // Sends another greeting
   rpc SayHelloAgain (HelloRequest) returns (HelloReply);
-  // Streams greetings
+  // Server streaming: streams greetings
   rpc SayHelloStream (HelloRequest) returns (stream HelloReply);
+  // Client streaming: client sends stream of requests, server responds with one reply
+  rpc SayHelloClientStream (stream HelloRequest) returns (HelloReply);
+  // Bidirectional streaming: both sides stream messages interactively
+  rpc SayHelloBidiStream (stream HelloRequest) returns (stream HelloReply);
+  // Returns rich error details with google.rpc.Status in grpc-status-details-bin
+  rpc SayHelloWithError (HelloRequest) returns (HelloReply);
 }
 
 // The request message containing the user's name.

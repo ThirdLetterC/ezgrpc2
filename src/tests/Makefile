@@ -2,7 +2,7 @@
 
 CFLAGS += -I./unity -I..
 
-PROGS = list pthpool mem roadmap metadata timeout compression health
+PROGS = list pthpool mem roadmap metadata timeout compression health interceptor status_details reflection
 
 ifeq ($(PROTOBUF_C),1)
   PROGS += pb
@@ -49,6 +49,24 @@ health.o: health.c
 health: health.o unity/unity.o ../libezgrpc2.a
 	$(CC) $(CFLAGS) health.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
 
+interceptor.o: interceptor.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+interceptor: interceptor.o unity/unity.o ../libezgrpc2.a
+	$(CC) $(CFLAGS) interceptor.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+
+status_details.o: status_details.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+status_details: status_details.o unity/unity.o ../libezgrpc2.a
+	$(CC) $(CFLAGS) status_details.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+
+reflection.o: reflection.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+reflection: reflection.o unity/unity.o ../libezgrpc2.a
+	$(CC) $(CFLAGS) reflection.o unity/unity.o $(LDFLAGS) -L.. -l:libezgrpc2.a -lnghttp2 -lz -lpthread -luuid -o $@
+
 test_msg.pb-c.c test_msg.pb-c.h: test_msg.proto
 	protoc-c -I. --c_out=. $<
 
@@ -70,9 +88,12 @@ test: all
 	./timeout
 	./compression
 	./health
+	./interceptor
+	./status_details
+	./reflection
 ifeq ($(PROTOBUF_C),1)
 	./pb
 endif
 
 clean:
-	rm -f *.o list pthpool mem pb roadmap metadata timeout compression health test_msg.pb-c.c test_msg.pb-c.h
+	rm -f *.o list pthpool mem pb roadmap metadata timeout compression health interceptor status_details reflection test_msg.pb-c.c test_msg.pb-c.h

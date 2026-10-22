@@ -7,3 +7,7 @@
 - [x] Streaming RPC support & verification (Server streaming `SayHelloStream` with multi-message delivery)
 - [x] Message compression (Gzip RFC 1952 via zlib, transparent frame decompression, `ezgrpc2_compression`)
 - [x] Standard gRPC Health Checking Protocol (`/grpc.health.v1.Health/Check`, `ezgrpc2_health` service)
+- [x] gRPC Server Reflection Protocol (`grpc.reflection.v1alpha` and `v1`, service discovery, `ezgrpc2_reflection`)
+- [x] Middleware / Interceptor Pipeline (`ezgrpc2_server_add_interceptor`, pre/post hooks, `ezgrpc2_interceptor_create_bearer_auth`)
+- [x] Client Streaming & Bidirectional Streaming Patterns (`SayHelloClientStream`, `SayHelloBidiStream`, stream frame sequencing)
+- [x] Rich Error Model (`google.rpc.Status` with `Any` details serialized to `grpc-status-details-bin`, `ezgrpc2_status_details`)

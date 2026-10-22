@@ -154,6 +154,8 @@ struct ezgrpc2_session {
   size_t nb_streams;
 };
 
+typedef struct ezgrpc2_interceptor ezgrpc2_interceptor;
+
 struct ezgrpc2_server {
   ezgrpc2_server_settings server_settings;
   ezgrpc2_http2_settings http2_settings;
@@ -196,6 +198,9 @@ struct ezgrpc2_server {
 
   size_t nb_sessions;
   ezgrpc2_session *sessions;
+
+  size_t nb_interceptors;
+  ezgrpc2_interceptor *interceptors;
 };
 
 #endif
