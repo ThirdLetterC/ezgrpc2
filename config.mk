@@ -93,8 +93,8 @@ ifeq ($(HAS_NULLPTR),0)
   CFLAGS += -Dnullptr="((void*)0)"
 endif
 
-# Ensure alignof is supported across all compilers (e.g. older clang with -std=c2x)
-HAS_ALIGNOF := $(shell printf "int main(void){return (int)alignof(int);}\n" | $(CC) $(C_STD) -x c - >/dev/null 2>&1 && echo 1 || echo 0)
+# Ensure alignof is supported across all compilers (e.g. older gcc/clang with -std=c2x)
+HAS_ALIGNOF := $(shell printf "typedef struct { int x; } t_s; int main(void){return (int)alignof(t_s);}\n" | $(CC) $(C_STD) -x c - >/dev/null 2>&1 && echo 1 || echo 0)
 ifeq ($(HAS_ALIGNOF),0)
   CFLAGS += -Dalignof=_Alignof
 endif
