@@ -27,11 +27,14 @@ objects = thpool.o
 
 objects += ezgrpc2_arena_event.o
 objects += ezgrpc2_arena_message.o
+objects += ezgrpc2_compression.o
 objects += ezgrpc2_event.o
 objects += ezgrpc2_events.o
 objects += ezgrpc2_global.o
 objects += ezgrpc2_grpc_status.o
 objects += ezgrpc2_header.o
+objects += ezgrpc2_health.o
+objects += ezgrpc2_metadata.o
 objects += ezgrpc2_http2_settings.o
 objects += ezgrpc2_list.o
 objects += ezgrpc2_mem.o
@@ -47,6 +50,7 @@ objects += ezgrpc2_server_settings.o
 objects += ezgrpc2_session.o
 objects += ezgrpc2_session_info.o
 objects += ezgrpc2_session_uuid.o
+objects += ezgrpc2_timeout.o
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
 ifeq ($(OS),Windows_NT)
@@ -60,7 +64,7 @@ libezgrpc2.a : $(objects)
 	$(Q)$(AR) rcs $@ $^
 
 libezgrpc2.so : $(objects)
-	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -o $@
+	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -o $@
 
 libezgrpc2.dll : $(objects)
 	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -o $@

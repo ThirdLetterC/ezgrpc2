@@ -4,6 +4,12 @@
 #include "ezgrpc2_list.h"
 
 typedef struct eznode_t eznode_t;
+struct eznode_t {
+  eznode_t *next;
+  eznode_t *prev;
+  void *data;
+};
+
 struct ezgrpc2_list {
   /* it's better to visualize this list as */
   /* front ---------------------> back */

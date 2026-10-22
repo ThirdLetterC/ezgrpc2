@@ -91,6 +91,9 @@ static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
       case EZGRPC2_EVENT_DATALOSS:
         handle_event_dataloss(&event[i], server);
         break;
+      case EZGRPC2_EVENT_TIMEOUT:
+        printf("event timeout on stream %d\n\n", event[i].timeout.stream_id);
+        break;
       case EZGRPC2_EVENT_CANCEL:
         printf("event cancel on stream %d\n\n", event[i].cancel.stream_id);
         break;

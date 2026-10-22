@@ -8,6 +8,7 @@
 #include "ezgrpc2_server.h"
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
+#include "ezgrpc2_timeout.h"
 #include "internal_helpers.h"
 #define atlog(...) (void)0
 #define ezlog(...) (void)0
@@ -219,9 +220,11 @@ EZGRPC2_API int ezgrpc2_server_poll(
   const int ready = poll(fds, nb_fds, timeout);
 #endif
 
+  server->events = events;
+  ezgrpc2_server_check_deadlines(server);
+
   if (ready <= 0)
     return ready;
-  server->events = events;
 
   // add ipv4 session
   if (fds[0].revents & POLLIN)

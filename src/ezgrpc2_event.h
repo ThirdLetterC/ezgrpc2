@@ -19,7 +19,8 @@ enum ezgrpc2_event_type {
   EZGRPC2_EVENT_DISCONNECT,
   EZGRPC2_EVENT_MESSAGE,
   EZGRPC2_EVENT_CANCEL,
-  EZGRPC2_EVENT_DATALOSS
+  EZGRPC2_EVENT_DATALOSS,
+  EZGRPC2_EVENT_TIMEOUT
 };
 typedef enum ezgrpc2_event_type ezgrpc2_event_type;
 
@@ -29,6 +30,11 @@ typedef enum ezgrpc2_event_type ezgrpc2_event_type;
 struct ezgrpc2_event_cancel {
   int32_t stream_id;
 };
+
+struct ezgrpc2_event_timeout {
+  int32_t stream_id;
+};
+typedef struct ezgrpc2_event_timeout ezgrpc2_event_timeout;
 
 /**
  *
@@ -71,6 +77,10 @@ struct ezgrpc2_event {
      * When :c:member:`ezgrpc2_event.type` is :c:enumerator:`EZGRPC2_EVENT_CANCEL`.
      */
     ezgrpc2_event_cancel cancel;
+    /**
+     * When :c:member:`ezgrpc2_event.type` is :c:enumerator:`EZGRPC2_EVENT_TIMEOUT`.
+     */
+    ezgrpc2_event_timeout timeout;
   };
   void *userdata;
 

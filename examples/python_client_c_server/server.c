@@ -68,21 +68,64 @@ static ezgrpc2_messages *handle_say_hello_again(const ezgrpc2_message *req_msg) 
   return res_msgs;
 }
 
+static ezgrpc2_messages *handle_say_hello_stream(const ezgrpc2_message *req_msg) {
+  Helloworld__HelloRequest *req = EZGRPC2_PB_UNPACK(
+      Helloworld__HelloRequest, &helloworld__hello_request__descriptor, req_msg);
+  if (req == nullptr) {
+    fprintf(stderr, "[server] Failed to unpack HelloRequest (stream)\n");
+    return nullptr;
+  }
+
+  const char *name = (req->name && req->name[0] != '\0') ? req->name : "World";
+  if (!g_quiet) {
+    printf("[server] Received SayHelloStream request for name='%s'\n", name);
+  }
+
+  ezgrpc2_messages *res_msgs = ezgrpc2_messages_new(nullptr);
+  for (int i = 1; i <= 3; i++) {
+    char reply_buf[256];
+    snprintf(reply_buf, sizeof(reply_buf), "Stream message #%d for %s", i, name);
+
+    Helloworld__HelloReply reply = HELLOWORLD__HELLO_REPLY__INIT;
+    reply.message = reply_buf;
+
+    size_t packed_len = protobuf_c_message_get_packed_size((ProtobufCMessage *)&reply);
+    uint8_t *buf = malloc(packed_len);
+    assert(buf != nullptr);
+    protobuf_c_message_pack((ProtobufCMessage *)&reply, buf);
+    ezgrpc2_message *msg = ezgrpc2_message_new(0, buf, packed_len);
+    free(buf);
+    ezgrpc2_messages_push(res_msgs, msg);
+  }
+
+  EZGRPC2_PB_FREE_UNPACKED(req);
+  return res_msgs;
+}
+
 static void handle_event_message(ezgrpc2_event *event, ezgrpc2_server *server) {
   method_handler_t *handler = event->userdata;
   size_t count = ezgrpc2_messages_count(event->message.messages);
 
   if (count == 0) {
-    /* Trailing empty frame (e.g., END_STREAM flag on empty frame) */
+    /* Trailing empty frame */
     return;
   }
 
   if (count != 1) {
-    /* Unary RPC expects exactly one request message */
     ezgrpc2_server_session_stream_end(server, event->session_uuid,
                                      event->message.stream_id,
                                      EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
     return;
+  }
+
+  // Check for custom binary metadata
+  size_t meta_len = 0;
+  const char *custom_bin = ezgrpc2_metadata_get(server, event->session_uuid, event->message.stream_id, "x-custom-bin", &meta_len);
+  if (custom_bin != nullptr && !g_quiet) {
+    size_t dec_len = 0;
+    uint8_t *dec = ezgrpc2_metadata_decode_bin(custom_bin, meta_len, &dec_len);
+    printf("[server] Received metadata x-custom-bin (%zu bytes encoded, %zu bytes decoded)\n", meta_len, dec_len);
+    ezgrpc2_free(dec);
   }
 
   ezgrpc2_message *req_msg = ezgrpc2_messages_pop(event->message.messages);
@@ -99,8 +142,12 @@ static void handle_event_message(ezgrpc2_event *event, ezgrpc2_server *server) {
   int send_res = ezgrpc2_server_session_stream_send(
       server, event->session_uuid, event->message.stream_id, resp_msgs);
   if (send_res == 0) {
-    ezgrpc2_server_session_stream_end(
-        server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+    ezgrpc2_metadata_entry trailers[1] = {
+        {.key = "x-custom-reply", .value = "pong", .key_len = 14, .value_len = 4}
+    };
+    ezgrpc2_server_session_stream_end2(
+        server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK,
+        nullptr, trailers, 1);
   } else {
     fprintf(stderr, "[server] Stream send failed: %d\n", send_res);
   }
@@ -114,6 +161,9 @@ static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
 
   while ((event = ezgrpc2_events_read(events, &nb_event)) != nullptr) {
     for (size_t i = 0; i < nb_event; i++) {
+      if (ezgrpc2_health_handle_event(server, &event[i])) {
+        continue;
+      }
       switch (event[i].type) {
       case EZGRPC2_EVENT_MESSAGE:
         handle_event_message(&event[i], server);
@@ -123,8 +173,11 @@ static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
             server, event[i].session_uuid, event[i].dataloss.stream_id,
             EZGRPC2_GRPC_STATUS_DATA_LOSS);
         break;
+      case EZGRPC2_EVENT_TIMEOUT:
+        if (!g_quiet) printf("[server] Stream %d timed out (deadline exceeded)\n", event[i].timeout.stream_id);
+        break;
       case EZGRPC2_EVENT_CANCEL:
-        printf("[server] Stream %d cancelled by client\n", event[i].cancel.stream_id);
+        if (!g_quiet) printf("[server] Stream %d cancelled by client\n", event[i].cancel.stream_id);
         break;
       case EZGRPC2_EVENT_CONNECT:
         if (!g_quiet) printf("[server] New client connection\n");
@@ -164,6 +217,11 @@ int main(int argc, char *argv[]) {
       .handler = handle_say_hello_again,
   };
 
+  method_handler_t say_hello_stream_handler = {
+      .name = "SayHelloStream",
+      .handler = handle_say_hello_stream,
+  };
+
   ezgrpc2_server *server = ezgrpc2_server_new(
       "0.0.0.0", port, "::", port, 16, nullptr, nullptr);
   if (server == nullptr) {
@@ -173,15 +231,19 @@ int main(int argc, char *argv[]) {
 
   printf("[server] Greeter gRPC server listening on port %d (IPv4 & IPv6)...\n", port);
 
-  /* Register service methods according to gRPC naming convention: /<package>.<Service>/<Method> */
+  /* Register service methods according to gRPC naming convention */
   (void)ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHello", &say_hello_handler, 0, 0);
   (void)ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHelloAgain", &say_hello_again_handler, 0, 0);
+  (void)ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHelloStream", &say_hello_stream_handler, 0, 0);
+
+  /* Register standard gRPC health service */
+  (void)ezgrpc2_health_register(server);
 
   ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
 
   while (g_running) {
     int res = ezgrpc2_server_poll(server, events, 500);
-    if (res > 0) {
+    if (res >= 0) {
       handle_events(server, events);
     } else if (res < 0) {
       break;

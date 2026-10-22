@@ -1,7 +1,7 @@
 -include ../config.mk
 
 CFLAGS += -I../src
-LDFLAGS += -L../src -l:libezgrpc2.a -lnghttp2 -lpthread 
+LDFLAGS += -L../src -l:libezgrpc2.a -lnghttp2 -lz -lpthread 
 
 CFLAGS+=$(EXTRACFLAGS)
 

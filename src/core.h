@@ -93,6 +93,8 @@ struct ezgrpc2_stream {
   bool is_te_trailers : 1;
   /* just a bool. if content type is application/grpc* */
   bool is_content_grpc : 1;
+  bool is_deadline_set : 1;
+  uint64_t deadline_ms;
 
   char *hcontent_type;
   char *hgrpc_encoding;

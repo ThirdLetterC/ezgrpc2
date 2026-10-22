@@ -6,6 +6,8 @@
 #include "core.h"
 #include "ezgrpc2_events_struct.h"
 #include "ezgrpc2_grpc_status.h"
+#include "ezgrpc2_timeout.h"
+#include "ezgrpc2_compression.h"
 
 #include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
@@ -42,7 +44,19 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_messages **mess
     lseek = seek;
     if (*messages == nullptr)
       *messages = ezgrpc2_messages_new(nullptr);
-    ezgrpc2_message *msg = ezgrpc2_message_new(cflag, msg_data, msg_len);
+    ezgrpc2_message *msg = nullptr;
+    if (cflag == 1) {
+      uint8_t *decomp = nullptr;
+      size_t decomp_len = 0;
+      if (ezgrpc2_decompress_gzip((const uint8_t *)msg_data, msg_len, &decomp, &decomp_len) == 0) {
+        msg = ezgrpc2_message_new(0, decomp, decomp_len);
+        ezgrpc2_free(decomp);
+      } else {
+        msg = ezgrpc2_message_new(cflag, msg_data, msg_len);
+      }
+    } else {
+      msg = ezgrpc2_message_new(cflag, msg_data, msg_len);
+    }
     assert(msg != nullptr);
     ezgrpc2_messages_push(*messages, msg);
     seek += msg_len;
@@ -291,7 +305,8 @@ static inline int on_frame_recv_headers(ezgrpc2_session *ezsession, const nghttp
                               ezstream->stream_id, 1);
     return 0;
   }
-  nghttp2_nv nva[2] = {
+  bool client_accepts_gzip = ezstream->hgrpc_accept_encoding && strstr(ezstream->hgrpc_accept_encoding, "gzip");
+  nghttp2_nv nva[4] = {
       {
         .name = (uint8_t *)":status", .namelen = 7,
         .value = (uint8_t *)"200", .valuelen = 3,
@@ -302,11 +317,30 @@ static inline int on_frame_recv_headers(ezgrpc2_session *ezsession, const nghttp
         .value = (uint8_t *)"application/grpc", .valuelen = 16,
         .flags = NGHTTP2_NV_FLAG_NONE
       },
+      {
+        .name = (uint8_t *)"grpc-accept-encoding", .namelen = 20,
+        .value = (uint8_t *)"gzip,identity", .valuelen = 13,
+        .flags = NGHTTP2_NV_FLAG_NONE
+      },
+      {
+        .name = (uint8_t *)"grpc-encoding", .namelen = 13,
+        .value = (uint8_t *)"gzip", .valuelen = 4,
+        .flags = NGHTTP2_NV_FLAG_NONE
+      },
   };
 
-  if (nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, nullptr, nva, 2, nullptr)) {
+  size_t nv_count = client_accepts_gzip ? 4 : 3;
+  if (nghttp2_submit_headers(ezsession->ngsession, 0, ezstream->stream_id, nullptr, nva, nv_count, nullptr)) {
     EZGRPC2_LOG_TRACE(ezsession->server, "nghttp2_submit_headers failed\n");
     return 1;
+  }
+
+  if (ezstream->hgrpc_timeout != nullptr) {
+    int64_t ms = ezgrpc2_timeout_parse_ms(ezstream->hgrpc_timeout);
+    if (ms > 0) {
+      ezstream->is_deadline_set = true;
+      ezstream->deadline_ms = ezgrpc2_time_now_ms() + (uint64_t)ms;
+    }
   }
 
   if (ezstream->path == nullptr) {

@@ -2,3 +2,8 @@
 - [x] Add `ezgrpc2_list_event_t` for easier type checking.
 - [x] Add `ezgrpc2_http2_settings*`
 - [x] Add `ezgrpc2_server_settings*`
+- [x] Custom metadata & binary headers (`ezgrpc2_metadata_get`, RFC 4648 `*-bin` base64 codec, `ezgrpc2_server_session_stream_end2` with trailers)
+- [x] Request deadlines & timeout enforcement (`grpc-timeout` parser, deadline tracking, `EZGRPC2_EVENT_TIMEOUT`)
+- [x] Streaming RPC support & verification (Server streaming `SayHelloStream` with multi-message delivery)
+- [x] Message compression (Gzip RFC 1952 via zlib, transparent frame decompression, `ezgrpc2_compression`)
+- [x] Standard gRPC Health Checking Protocol (`/grpc.health.v1.Health/Check`, `ezgrpc2_health` service)

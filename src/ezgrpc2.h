@@ -32,6 +32,10 @@
 #include "ezgrpc2_messages.h"
 #include "ezgrpc2_grpc_status.h"
 #include "ezgrpc2_header.h"
+#include "ezgrpc2_metadata.h"
+#include "ezgrpc2_compression.h"
+#include "ezgrpc2_health.h"
+#include "ezgrpc2_timeout.h"
 
 #if defined(EZGRPC2_ENABLE_PROTOBUF_C)
 #include "ezgrpc2_protobuf_c.h"

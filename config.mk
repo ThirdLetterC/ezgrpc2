@@ -55,6 +55,16 @@ ifeq ($(PROTOBUF_C),1)
   LDFLAGS += -lprotobuf-c
 endif
 
+# Zlib compression support:
+ifeq ($(origin ZLIB), undefined)
+  ZLIB := $(shell (pkg-config --exists zlib 2>/dev/null || test -f /usr/include/zlib.h) && echo 1 || echo 0)
+endif
+
+ifeq ($(ZLIB),1)
+  CFLAGS += -DEZGRPC2_ENABLE_ZLIB
+  LDFLAGS += -lz
+endif
+
 CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)
 CFLAGS += -DCONFIG_IO_METHOD=$(CONFIG_IO_METHOD)
 CFLAGS += -DCONFIG_STREAM_MAX_HEADERS=$(CONFIG_STREAM_MAX_HEADERS)

@@ -6,12 +6,6 @@
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_list_struct.h"
 
-struct eznode_t {
-  eznode_t *next;
-  eznode_t *prev;
-  void *data;
-};
-
 EZGRPC2_API ezgrpc2_list *ezgrpc2_list_new([[maybe_unused]] void *unused) {
   ezgrpc2_list *ezlist = malloc(sizeof(*ezlist));
   if (ezlist == nullptr)

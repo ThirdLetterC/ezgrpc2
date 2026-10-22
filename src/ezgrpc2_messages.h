@@ -10,6 +10,10 @@ static inline ezgrpc2_message *ezgrpc2_messages_pop(ezgrpc2_messages *messages) 
   return ezgrpc2_list_message_pop_front(messages);
 }
 
+static inline ezgrpc2_message *ezgrpc2_messages_peek_front(ezgrpc2_messages *messages) {
+  return ezgrpc2_list_message_peek_front(messages);
+}
+
 static inline int ezgrpc2_messages_push(ezgrpc2_messages *messages, ezgrpc2_message *message) {
   return ezgrpc2_list_message_push_back(messages, message);
 }

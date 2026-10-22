@@ -87,11 +87,17 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
   return 0;
 }
 
-EZGRPC2_API int ezgrpc2_server_session_stream_end(
+#include "ezgrpc2_metadata.h"
+#include "ezgrpc2_header.h"
+
+EZGRPC2_API int ezgrpc2_server_session_stream_end2(
   ezgrpc2_server *ezserver,
   ezgrpc2_session_uuid session_uuid,
   i32 stream_id,
-  ezgrpc2_grpc_status status) {
+  ezgrpc2_grpc_status status,
+  const char *custom_status_message,
+  const ezgrpc2_metadata_entry *trailers,
+  size_t nb_trailers) {
   ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == nullptr) {
     return 1;
@@ -103,18 +109,71 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end(
 
   char grpc_status[32] = {};
   int len = snprintf(grpc_status, sizeof(grpc_status), "%d", (int)status);
-  const char *grpc_message = ezgrpc2_grpc_status_strstatus(status);
-  nghttp2_nv trailers[] = {
-      {(uint8_t *)"grpc-status", (uint8_t *)grpc_status, 11, (size_t)len, NGHTTP2_NV_FLAG_NONE},
-      {(uint8_t *)"grpc-message", (uint8_t *)grpc_message, 12, strlen(grpc_message), NGHTTP2_NV_FLAG_NONE},
-  };
+  const char *grpc_message = custom_status_message ? custom_status_message : ezgrpc2_grpc_status_strstatus(status);
+
+  size_t total_trailers = 2 + nb_trailers;
+  nghttp2_nv *nva = malloc(total_trailers * sizeof(nghttp2_nv));
+  if (nva == nullptr) {
+    return 1;
+  }
+
+  nva[0] = (nghttp2_nv){(uint8_t *)"grpc-status", (uint8_t *)grpc_status, 11, (size_t)len, NGHTTP2_NV_FLAG_NONE};
+  nva[1] = (nghttp2_nv){(uint8_t *)"grpc-message", (uint8_t *)grpc_message, 12, strlen(grpc_message), NGHTTP2_NV_FLAG_NONE};
+
+  for (size_t i = 0; i < nb_trailers; i++) {
+    nva[2 + i] = (nghttp2_nv){
+      .name = (uint8_t *)trailers[i].key,
+      .value = (uint8_t *)trailers[i].value,
+      .namelen = trailers[i].key_len ? trailers[i].key_len : strlen(trailers[i].key),
+      .valuelen = trailers[i].value_len ? trailers[i].value_len : strlen(trailers[i].value),
+      .flags = NGHTTP2_NV_FLAG_NONE
+    };
+  }
+
   if (!ezgrpc2_list_is_empty(ezstream->lqueue_omessages)) {
     EZGRPC2_LOG_TRACE(ezserver, "ending stream but messages are still queued\n");
   }
-  nghttp2_submit_trailer(ezsession->ngsession, stream_id, trailers, 2);
+  nghttp2_submit_trailer(ezsession->ngsession, stream_id, nva, total_trailers);
+  free(nva);
   EZGRPC2_LOG_TRACE(ezserver, "trailer submitted\n");
   nghttp2_session_send(ezsession->ngsession);
   return 0;
+}
+
+EZGRPC2_API int ezgrpc2_server_session_stream_end(
+  ezgrpc2_server *ezserver,
+  ezgrpc2_session_uuid session_uuid,
+  i32 stream_id,
+  ezgrpc2_grpc_status status) {
+  return ezgrpc2_server_session_stream_end2(ezserver, session_uuid, stream_id, status, nullptr, nullptr, 0);
+}
+
+EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
+  ezgrpc2_server *ezserver,
+  ezgrpc2_session_uuid session_uuid,
+  i32 stream_id,
+  ezgrpc2_header *ezheader) {
+  if (ezserver == nullptr || ezheader == nullptr || ezheader->name == nullptr) {
+    return 1;
+  }
+  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  if (ezsession == nullptr) {
+    return 1;
+  }
+  ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(ezsession->ngsession, stream_id);
+  if (ezstream == nullptr) {
+    return 2;
+  }
+  size_t nlen = ezheader->namelen ? ezheader->namelen : strlen(ezheader->name);
+  for (size_t i = 0; i < ezstream->nb_headers; i++) {
+    if (ezstream->headers[i].namelen == nlen &&
+        strncasecmp(ezstream->headers[i].name, ezheader->name, nlen) == 0) {
+      ezheader->value = ezstream->headers[i].value;
+      ezheader->valuelen = ezstream->headers[i].valuelen;
+      return 0;
+    }
+  }
+  return 3;
 }
 
 EZGRPC2_API int ezgrpc2_server_session_end(
