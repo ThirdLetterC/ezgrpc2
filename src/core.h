@@ -26,14 +26,6 @@
 #  define SHUT_RDWR SD_BOTH
 #  define POLLRDHUP 0
 
-static char *strndup(char *c, size_t n) {
-  size_t l;
-  for (l = 0; l < n && c[l];) l++;
-  char *r = calloc(1, l+1);
-  memcpy(r, c, l);
-  return r;
-}
-
 /* winsock send/recv returns int instead of ssize_t */
 #define EZSSIZE           int
 #define EZSOCKET          SOCKET

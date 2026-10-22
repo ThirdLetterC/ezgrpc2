@@ -153,6 +153,22 @@ ezgrpc2_session *session_find(ezgrpc2_session *sessions, size_t nb_sessions, ezg
   return ezgrpc2_session_uuid_is_equal(session_uuid, sessions[session_uuid.index].session_uuid) ? sessions + session_uuid.index: nullptr;
 }
 
+static void *nghttp2_mem_malloc(size_t size, [[maybe_unused]] void *user_data) {
+  return ezgrpc2_malloc(size);
+}
+
+static void nghttp2_mem_free(void *ptr, [[maybe_unused]] void *user_data) {
+  ezgrpc2_free(ptr);
+}
+
+static void *nghttp2_mem_calloc(size_t nmemb, size_t size, [[maybe_unused]] void *user_data) {
+  return ezgrpc2_calloc(nmemb, size);
+}
+
+static void *nghttp2_mem_realloc(void *ptr, size_t size, [[maybe_unused]] void *user_data) {
+  return ezgrpc2_realloc(ptr, size);
+}
+
 int session_create(
     ezgrpc2_session *ezsession,
     EZSOCKET sockfd,
@@ -173,7 +189,14 @@ int session_create(
   `---------------------*/
   server_setup_ngcallbacks(ngcallbacks);
 
-  res = nghttp2_session_server_new(&ezsession->ngsession, ngcallbacks, ezsession);
+  nghttp2_mem mem = {
+      .mem_user_data = nullptr,
+      .malloc = nghttp2_mem_malloc,
+      .free = nghttp2_mem_free,
+      .calloc = nghttp2_mem_calloc,
+      .realloc = nghttp2_mem_realloc,
+  };
+  res = nghttp2_session_server_new3(&ezsession->ngsession, ngcallbacks, ezsession, nullptr, &mem);
   nghttp2_session_callbacks_del(ngcallbacks);
   if (res < 0) {
     return 1;

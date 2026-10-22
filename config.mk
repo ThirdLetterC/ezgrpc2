@@ -9,6 +9,38 @@ CONFIG_PATH_MAX_LEN = 64
 CONFIG_STREAM_MAX_HEADERS = 32
 CONFIG_CACHE_LINE_SIZE = 64
 
+# Allocator configuration:
+#   ALLOCATOR=default   (standard libc malloc)
+#   ALLOCATOR=mimalloc  (Microsoft mimalloc, links -lmimalloc)
+#   ALLOCATOR=jemalloc  (jemalloc, links -ljemalloc)
+#   ALLOCATOR=custom    (runtime pluggable custom allocator via ezgrpc2_set_allocator)
+# Convenience aliases:
+#   make MIMALLOC=1
+#   make JEMALLOC=1
+ALLOCATOR ?= default
+
+ifeq ($(MIMALLOC),1)
+  ALLOCATOR = mimalloc
+endif
+
+ifeq ($(JEMALLOC),1)
+  ALLOCATOR = jemalloc
+endif
+
+ifeq ($(ALLOCATOR),mimalloc)
+  CFLAGS += -DEZGRPC2_USE_MIMALLOC
+  LDFLAGS += -lmimalloc
+endif
+
+ifeq ($(ALLOCATOR),jemalloc)
+  CFLAGS += -DEZGRPC2_USE_JEMALLOC
+  LDFLAGS += -ljemalloc
+endif
+
+ifeq ($(ALLOCATOR),custom)
+  CFLAGS += -DEZGRPC2_USE_CUSTOM_ALLOCATOR
+endif
+
 CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)
 CFLAGS += -DCONFIG_IO_METHOD=$(CONFIG_IO_METHOD)
 CFLAGS += -DCONFIG_STREAM_MAX_HEADERS=$(CONFIG_STREAM_MAX_HEADERS)
@@ -22,13 +54,13 @@ CFLAGS += -D_GNU_SOURCE
 CFLAGS += -D_FORTIFY_SOURCE=2
 
 ifneq ($(wildcard $(HOME)/.local/lib),)
-  LDFLAGS += -L$(HOME)/.local/lib
+  LDFLAGS += -L$(HOME)/.local/lib -Wl,-rpath,$(HOME)/.local/lib
 endif
-ifneq ($(wildcard $(HOME)/.local/include/nghttp2/nghttp2.h),)
+ifneq ($(wildcard $(HOME)/.local/include),)
   CFLAGS += -I$(HOME)/.local/include
 endif
 ifneq ($(wildcard $(HOME)/.local/usr/lib/x86_64-linux-gnu),)
-  LDFLAGS += -L$(HOME)/.local/usr/lib/x86_64-linux-gnu
+  LDFLAGS += -L$(HOME)/.local/usr/lib/x86_64-linux-gnu -Wl,-rpath,$(HOME)/.local/usr/lib/x86_64-linux-gnu
 endif
 
 # enable optimization if D is not set

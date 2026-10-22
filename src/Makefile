@@ -34,6 +34,7 @@ objects += ezgrpc2_grpc_status.o
 objects += ezgrpc2_header.o
 objects += ezgrpc2_http2_settings.o
 objects += ezgrpc2_list.o
+objects += ezgrpc2_mem.o
 objects += ezgrpc2_message.o
 #objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
