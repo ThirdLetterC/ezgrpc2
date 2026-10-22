@@ -3,9 +3,15 @@ all :
 	$(MAKE) -C src
 	$(MAKE) -C examples
 
+test: all
+	$(MAKE) -C src/tests test
+	$(MAKE) -C examples/python_client_c_server test
+	$(MAKE) -C examples/python_client_c_server test-tls
+
 help:
 	@echo "Available targets:"
-	@echo "  all               - Builds src/libezgrpc.{a,so} and examples/*"
+	@echo "  all               - Builds src/libezgrpc2.{a,so} and examples/*"
+	@echo "  test              - Runs unit tests and Python client integration tests"
 	@echo "  clean             - Removes generated *.o, *.so and executables"
 	@echo ""
 	@echo "  make D=1 all        enables -ggdb3 and server debug logs for development"

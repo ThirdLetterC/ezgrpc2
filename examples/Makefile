@@ -29,6 +29,9 @@ clean :
 	rm -f $(targets) *.o
 	$(MAKE) -C python_client_c_server clean
 
+../src/libezgrpc2.a:
+	$(MAKE) -C ../src
+
 %.bin : %.o ../src/libezgrpc2.a
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 

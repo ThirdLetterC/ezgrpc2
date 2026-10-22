@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }} / ${{ matrix.allocator }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-24.04, ubuntu-22.04 ]
+        compiler: [ gcc, clang ]
+        allocator: [ default ]
+        include:
+          - os: ubuntu-24.04
+            compiler: gcc
+            allocator: mimalloc
+          - os: ubuntu-24.04
+            compiler: gcc
+            allocator: jemalloc
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libnghttp2-dev \
+            zlib1g-dev \
+            libssl-dev \
+            uuid-dev \
+            libprotobuf-c-dev \
+            protobuf-c-compiler \
+            protobuf-compiler \
+            libmimalloc-dev \
+            libjemalloc-dev
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install grpcio grpcio-tools protobuf
+
+      - name: Build ezgrpc2 and examples
+        run: |
+          make clean
+          make CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
+
+      - name: Run unit tests
+        run: |
+          make -C src/tests test CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
+
+      - name: Run Python client integration tests (Cleartext h2c)
+        run: |
+          make -C examples/python_client_c_server test CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
+
+      - name: Run Python client integration tests (TLS / SSL h2)
+        run: |
+          make -C examples/python_client_c_server test-tls CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
+
+  sanitizers:
+    name: ASAN / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [ gcc, clang ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libnghttp2-dev \
+            zlib1g-dev \
+            libssl-dev \
+            uuid-dev \
+            libprotobuf-c-dev \
+            protobuf-c-compiler \
+            protobuf-compiler
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install grpcio grpcio-tools protobuf
+
+      - name: Build and test under AddressSanitizer
+        run: |
+          make clean
+          make CC=${{ matrix.compiler }} ASAN=1
+          make -C src/tests test CC=${{ matrix.compiler }} ASAN=1
+          make -C examples/python_client_c_server test CC=${{ matrix.compiler }} ASAN=1
+          make -C examples/python_client_c_server test-tls CC=${{ matrix.compiler }} ASAN=1
