@@ -110,6 +110,9 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
       perror("setsockopt ipv4");
       goto err;
     }
+#ifdef SO_REUSEPORT
+    (void)setsockopt(ipv4_sockfd, SOL_SOCKET, SO_REUSEPORT, (void*)&(int){1}, sizeof(int));
+#endif
 
     if (bind(ipv4_sockfd, (struct sockaddr *)&ipv4_saddr, sizeof(ipv4_saddr)) == EZSOCKET_ERROR) {
       perror("bind ipv4");
@@ -150,6 +153,9 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
       perror("setsockopt ipv6");
       goto err;
     }
+#ifdef SO_REUSEPORT
+    (void)setsockopt(ipv6_sockfd, SOL_SOCKET, SO_REUSEPORT, (void*)&(int){1}, sizeof(int));
+#endif
     if (setsockopt(ipv6_sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&(int){1},
                    sizeof(int))) {
       perror("setsockopt ipv6");

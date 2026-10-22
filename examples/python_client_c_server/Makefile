@@ -36,12 +36,14 @@ run-client: proto-py
 test: all
 	@echo "Starting C gRPC server..."
 	@./server.bin 19009 > server.log 2>&1 & SERVER_PID=$$!; \
-	trap 'kill $$SERVER_PID 2>/dev/null || true' EXIT INT TERM; \
+	trap 'kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true' EXIT INT TERM; \
 	sleep 1; \
 	echo "Running Python gRPC client..."; \
 	$(PYTHON) client.py localhost:19009; \
 	STATUS=$$?; \
 	kill $$SERVER_PID 2>/dev/null || true; \
+	wait $$SERVER_PID 2>/dev/null || true; \
+	if [ $$STATUS -ne 0 ]; then cat server.log; fi; \
 	exit $$STATUS
 
 server.crt server.key:
@@ -49,13 +51,15 @@ server.crt server.key:
 
 test-tls: all server.crt server.key
 	@echo "Starting C gRPC server with TLS..."
-	@USE_TLS=1 ./server.bin 19009 > server_tls.log 2>&1 & SERVER_PID=$$!; \
-	trap 'kill $$SERVER_PID 2>/dev/null || true' EXIT INT TERM; \
+	@USE_TLS=1 ./server.bin 19019 > server_tls.log 2>&1 & SERVER_PID=$$!; \
+	trap 'kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true' EXIT INT TERM; \
 	sleep 1; \
 	echo "Running Python gRPC client over TLS..."; \
-	USE_TLS=1 TLS_CERT=server.crt $(PYTHON) client.py localhost:19009 --tls; \
+	USE_TLS=1 TLS_CERT=server.crt $(PYTHON) client.py localhost:19019 --tls; \
 	STATUS=$$?; \
 	kill $$SERVER_PID 2>/dev/null || true; \
+	wait $$SERVER_PID 2>/dev/null || true; \
+	if [ $$STATUS -ne 0 ]; then cat server_tls.log; fi; \
 	exit $$STATUS
 
 clean:
