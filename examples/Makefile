@@ -21,9 +21,13 @@ ifeq ($(HAVE_SECCOMP),1)
 endif
 
 all : $(targets)
+ifeq ($(PROTOBUF_C),1)
+	$(MAKE) -C python_client_c_server
+endif
 
 clean :
 	rm -f $(targets) *.o
+	$(MAKE) -C python_client_c_server clean
 
 %.bin : %.o ../src/libezgrpc2.a
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)

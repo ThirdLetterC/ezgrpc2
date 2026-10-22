@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package test;
+
+message Echo {
+  string text = 1;
+  int32 number = 2;
+}

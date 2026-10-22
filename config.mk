@@ -9,6 +9,8 @@ CONFIG_PATH_MAX_LEN = 64
 CONFIG_STREAM_MAX_HEADERS = 32
 CONFIG_CACHE_LINE_SIZE = 64
 
+export PATH := $(HOME)/.local/bin:$(PATH)
+
 # Allocator configuration:
 #   ALLOCATOR=default   (standard libc malloc)
 #   ALLOCATOR=mimalloc  (Microsoft mimalloc, links -lmimalloc)
@@ -39,6 +41,18 @@ endif
 
 ifeq ($(ALLOCATOR),custom)
   CFLAGS += -DEZGRPC2_USE_CUSTOM_ALLOCATOR
+endif
+
+# Protobuf-C integration:
+# Set PROTOBUF_C=1 to enable protobuf-c support (or 0 to disable).
+# Defaults to 1 if protobuf-c is available.
+ifeq ($(origin PROTOBUF_C), undefined)
+  PROTOBUF_C := $(shell (pkg-config --exists libprotobuf-c 2>/dev/null || test -f $(HOME)/.local/include/protobuf-c/protobuf-c.h || test -f /usr/include/protobuf-c/protobuf-c.h) && echo 1 || echo 0)
+endif
+
+ifeq ($(PROTOBUF_C),1)
+  CFLAGS += -DEZGRPC2_ENABLE_PROTOBUF_C
+  LDFLAGS += -lprotobuf-c
 endif
 
 CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)

@@ -30,4 +30,8 @@
 #include "ezgrpc2_grpc_status.h"
 #include "ezgrpc2_header.h"
 
+#if defined(EZGRPC2_ENABLE_PROTOBUF_C)
+#include "ezgrpc2_protobuf_c.h"
+#endif
+
 #endif /* EZGRPC2_H */

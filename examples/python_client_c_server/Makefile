@@ -1,0 +1,49 @@
+-include ../../config.mk
+
+CFLAGS += -I../../src
+LDFLAGS += -L../../src -l:libezgrpc2.a -lnghttp2 -lpthread -lprotobuf-c
+
+ifeq ($(OS),Windows_NT)
+  LDFLAGS += -lWs2_32 -lRpcrt4
+else
+  LDFLAGS += -luuid
+endif
+
+PROTOC_C ?= protoc-c
+PYTHON ?= python3
+
+all: proto-c proto-py server.bin
+
+proto-c: helloworld.pb-c.c helloworld.pb-c.h
+
+helloworld.pb-c.c helloworld.pb-c.h: helloworld.proto
+	$(PROTOC_C) -I. --c_out=. $<
+
+proto-py: helloworld_pb2.py helloworld_pb2_grpc.py
+
+helloworld_pb2.py helloworld_pb2_grpc.py: helloworld.proto
+	$(PYTHON) -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. $<
+
+server.bin: server.c helloworld.pb-c.c ../../src/libezgrpc2.a
+	$(CC) $(CFLAGS) server.c helloworld.pb-c.c -o $@ $(LDFLAGS)
+
+run-server: server.bin
+	./server.bin
+
+run-client: proto-py
+	$(PYTHON) client.py
+
+test: all
+	@echo "Starting C gRPC server..."
+	@./server.bin 19009 > server.log 2>&1 & SERVER_PID=$$!; \
+	trap 'kill $$SERVER_PID 2>/dev/null || true' EXIT INT TERM; \
+	sleep 1; \
+	echo "Running Python gRPC client..."; \
+	$(PYTHON) client.py localhost:19009; \
+	STATUS=$$?; \
+	kill $$SERVER_PID 2>/dev/null || true; \
+	exit $$STATUS
+
+clean:
+	rm -f server.bin *.o helloworld.pb-c.c helloworld.pb-c.h helloworld_pb2.py helloworld_pb2_grpc.py helloworld_pb2.pyi server.log
+	rm -rf __pycache__

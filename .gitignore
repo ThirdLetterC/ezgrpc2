@@ -14,3 +14,11 @@ docs/build
 src/tests/list
 src/tests/pthpool
 src/tests/mem
+src/tests/pb
+src/tests/*.pb-c.*
+*.pb-c.*
+*_pb2.py
+*_pb2_grpc.py
+*_pb2.pyi
+__pycache__/
+*.log

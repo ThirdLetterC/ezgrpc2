@@ -13,6 +13,7 @@ help:
 	@echo "  make MIMALLOC=1 all enables Microsoft mimalloc allocator"
 	@echo "  make JEMALLOC=1 all enables jemalloc allocator"
 	@echo "  make ALLOCATOR=name enables specific allocator (default, mimalloc, jemalloc, custom)"
+	@echo "  make PROTOBUF_C=1   enables protobuf-c integration (auto-detected by default)"
 
 clean :
 	$(MAKE) -C src clean
