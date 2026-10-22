@@ -15,4 +15,4 @@ test: all
 	./pthpool
 
 clean:
-	rm *.o list pthpool || true
+	rm -f *.o list pthpool

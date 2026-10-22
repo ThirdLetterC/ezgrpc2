@@ -1,5 +1,10 @@
 #ifndef EZGRPC2_CORE_H
 #define EZGRPC2_CORE_H
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>

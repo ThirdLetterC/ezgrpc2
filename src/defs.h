@@ -3,15 +3,15 @@
 
 #include <stdlib.h>
 
-#define REALIGN(alignment, size) ((size) + ((alignment) - ((size) & ((alignment) - 1))))
+#define REALIGN(alignment, size) (((size) + ((alignment) - 1)) & ~((alignment) - 1))
 
 #ifdef __ANDROID__
 #include <android/api-level.h>
 #if __ANDROID_API__ < 28
 static inline void *aligned_alloc(size_t alignment, size_t size){
-  void *ret = NULL;
+  void *ret = nullptr;
   if (posix_memalign(&ret, alignment, size))
-    return NULL;
+    return nullptr;
   return ret;
 }
 

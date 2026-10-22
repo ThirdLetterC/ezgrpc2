@@ -13,9 +13,9 @@ struct ezgrpc2_list {
   size_t count;
 };
 
-EZGRPC2_API static inline void ezgrpc2_list_init(ezgrpc2_list *list) {
-  list->front = NULL;
-  list->back = NULL;
+static inline void ezgrpc2_list_init(ezgrpc2_list *list) {
+  list->front = nullptr;
+  list->back = nullptr;
   list->count = 0;
 }
 

@@ -1,5 +1,6 @@
 #ifndef EZGRPC2_SERVER_SETTINGS_STRUCT_H
 #define EZGRPC2_SERVER_SETTINGS_STRUCT_H
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 struct ezgrpc2_server_settings {

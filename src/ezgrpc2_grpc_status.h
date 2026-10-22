@@ -26,6 +26,6 @@ enum ezgrpc2_grpc_status {
 };
 typedef enum ezgrpc2_grpc_status ezgrpc2_grpc_status;
 
-char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status status);
+const char *ezgrpc2_grpc_status_strstatus(ezgrpc2_grpc_status status);
 
 #endif

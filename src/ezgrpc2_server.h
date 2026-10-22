@@ -97,9 +97,9 @@ EZGRPC2_API int ezgrpc2_server_poll(
   int timeout);
 
 
-EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, char *path, void *userdata, uint64_t accept_content_type, uint64_t accept_content_encoding);
+EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path, void *userdata, uint64_t accept_content_type, uint64_t accept_content_encoding);
 
-EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, char *path);
+EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, const char *path);
 
 EZGRPC2_API void ezgrpc2_server_free(
   ezgrpc2_server *server);
@@ -108,8 +108,7 @@ ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server);
 
 ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server, ezgrpc2_session_uuid *restrict session_uuid);
 
-
-EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *restrict server, uint32_t log_level, char *restrict fmt, ...);
+EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level, const char *restrict fmt, ...);
 
 
 #endif

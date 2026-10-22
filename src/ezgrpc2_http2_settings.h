@@ -6,6 +6,7 @@ typedef struct ezgrpc2_http2_settings ezgrpc2_http2_settings;
 EZGRPC2_API void ezgrpc2_http2_settings_set_initial_window_size(ezgrpc2_http2_settings *http2_settings, size_t initial_window_size);
 EZGRPC2_API void ezgrpc2_http2_settings_set_max_frame_size(ezgrpc2_http2_settings *http2_settings, size_t max_frame_size);
 EZGRPC2_API void ezgrpc2_http2_settings_set_max_concurrent_streams(ezgrpc2_http2_settings *http2_settings, size_t max_concurrent_streams);
+EZGRPC2_API void ezgrpc2_http2_settings_set_max_paths(ezgrpc2_http2_settings *http2_settings, size_t max_paths);
 //void ezgrpc2_http2_settings_set_write_callback(ezgrpc2_http2_settings *http2_settings,
 //    ssize_t (*write)(void *sock, void *buf, size_t len, int flags)
 //    ){

@@ -1,6 +1,8 @@
 #ifndef EZGRPC2_INTERNAL_HELPERS_H
 #define EZGRPC2_INTERNAL_HELPERS_H
 
+#include <stdio.h>
+#include <string.h>
 #include "core.h"
 
 #ifdef _WIN32
@@ -24,15 +26,14 @@ void stream_free(ezgrpc2_stream *stream);
 ezgrpc2_stream *stream_new(i32 stream_id);
 
 int list_cmp_ezheader_name(const void *data, const void *userdata);
-void ezlog(char *fmt, ...);
-void ezflog(FILE *fp, char *fmt, ...);
+void ezlog(const char *fmt, ...);
+void ezflog(FILE *fp, const char *fmt, ...);
 char *ezgetdt(char *buf, size_t len);
-
 
 EZNFDS get_unused_pollfd_ndx(struct pollfd *fds, EZNFDS nb_fds);
 
 /* unaligned read unsigned 32 */
-static inline uint32_t uread_u32(void *p) {
+static inline uint32_t uread_u32(const void *p) {
   uint32_t ret;
   memcpy(&ret, p, 4);
   return ret;

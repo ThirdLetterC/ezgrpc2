@@ -23,7 +23,7 @@ endif
 all : $(targets)
 
 clean :
-	rm $(targets)
+	rm -f $(targets) *.o
 
 %.bin : %.o ../src/libezgrpc2.a
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)

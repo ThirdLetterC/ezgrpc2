@@ -45,7 +45,7 @@ objects += ezgrpc2_session_info.o
 objects += ezgrpc2_session_uuid.o
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
-ifdef ($(OS),Windows_NT)
+ifeq ($(OS),Windows_NT)
   objects += wepoll.o
 endif
 #targets += examples/hello_worldcpp.bin
@@ -56,7 +56,7 @@ libezgrpc2.a : $(objects)
 	$(Q)$(AR) rcs $@ $^
 
 libezgrpc2.so : $(objects)
-	$(Q)$(CC) -shared -lnghttp2 $^ -o $@
+	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -o $@
 
 libezgrpc2.dll : $(objects)
 	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -o $@
@@ -65,7 +65,7 @@ libezgrpc2.dll : $(objects)
 	$(CC) -c $(CFLAGS) $< -o $@
 
 clean :
-	rm $(targets) *.o
+	rm -f $(targets) *.o
 	$(MAKE) -C tests clean
 
 test:

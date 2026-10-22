@@ -27,10 +27,10 @@ static inline size_t ezgrpc2_messages_count(ezgrpc2_messages *messages) {
 }
 
 static inline void ezgrpc2_messages_free(ezgrpc2_messages *messages) {
-  if (messages == NULL) return;
+  if (messages == nullptr) return;
   ezgrpc2_list *lmessages = (ezgrpc2_list*)messages;
   ezgrpc2_message *message;
-  while ((message = ezgrpc2_list_pop_front(lmessages)) != NULL) {
+  while ((message = ezgrpc2_list_pop_front(lmessages)) != nullptr) {
     ezgrpc2_message_free(message);
   }
 

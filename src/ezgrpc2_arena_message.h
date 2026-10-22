@@ -17,7 +17,7 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_arena_message_malloc(ezgrpc2_arena_message 
 /* appends to the last element */
 EZGRPC2_API ezgrpc2_message *ezgrpc2_arena_message_read(ezgrpc2_arena_message *arena_message);
 
-EZGRPC2_API size_t ezgrpc2_arena_message_is_empty(ezgrpc2_arena_message *arena_message);
+EZGRPC2_API int ezgrpc2_arena_message_is_empty(ezgrpc2_arena_message *arena_message);
 
 EZGRPC2_API int ezgrpc2_arena_message_count(ezgrpc2_arena_message *arena_message);
 
