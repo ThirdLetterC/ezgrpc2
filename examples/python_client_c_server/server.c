@@ -9,6 +9,7 @@
 #include "helloworld.pb-c.h"
 
 static volatile sig_atomic_t g_running = 1;
+static int g_quiet = 0;
 
 static void sig_handler([[maybe_unused]] int sig) {
   g_running = 0;
@@ -28,7 +29,9 @@ static ezgrpc2_messages *handle_say_hello(const ezgrpc2_message *req_msg) {
   }
 
   const char *name = (req->name && req->name[0] != '\0') ? req->name : "World";
-  printf("[server] Received SayHello request for name='%s'\n", name);
+  if (!g_quiet) {
+    printf("[server] Received SayHello request for name='%s'\n", name);
+  }
 
   char reply_buf[256];
   snprintf(reply_buf, sizeof(reply_buf), "Hello, %s!", name);
@@ -50,7 +53,9 @@ static ezgrpc2_messages *handle_say_hello_again(const ezgrpc2_message *req_msg) 
   }
 
   const char *name = (req->name && req->name[0] != '\0') ? req->name : "World";
-  printf("[server] Received SayHelloAgain request for name='%s'\n", name);
+  if (!g_quiet) {
+    printf("[server] Received SayHelloAgain request for name='%s'\n", name);
+  }
 
   char reply_buf[256];
   snprintf(reply_buf, sizeof(reply_buf), "Hello again, %s!", name);
@@ -122,10 +127,10 @@ static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
         printf("[server] Stream %d cancelled by client\n", event[i].cancel.stream_id);
         break;
       case EZGRPC2_EVENT_CONNECT:
-        printf("[server] New client connection\n");
+        if (!g_quiet) printf("[server] New client connection\n");
         break;
       case EZGRPC2_EVENT_DISCONNECT:
-        printf("[server] Client disconnected\n");
+        if (!g_quiet) printf("[server] Client disconnected\n");
         break;
       }
     }
@@ -138,6 +143,9 @@ int main(int argc, char *argv[]) {
   if (argc > 1) {
     port = atoi(argv[1]);
     if (port <= 0 || port > 65535) port = 19009;
+  }
+  if (argc > 2) {
+    g_quiet = atoi(argv[2]);
   }
 
   signal(SIGPIPE, SIG_IGN);
