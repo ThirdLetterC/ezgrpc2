@@ -1,4 +1,4 @@
-# Formatting for the ezgrpc2 C sources. Run `make format` (or `make format-check`).
+# Formatting for the ezgrpc2 C sources. Run `cmake --build build --target format` (or `format-check`).
 BasedOnStyle: LLVM
 Language: C
 Standard: Latest

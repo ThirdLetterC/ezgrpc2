@@ -9,17 +9,21 @@ DATA='{"name":"benchmark_user"}'
 
 run_test() {
   local name="$1"
-  local make_cmd="$2"
+  local allocator="$2"
+  local build_dir="build-bench-$allocator"
 
   echo "============================================================"
   echo " Benchmarking Allocator: $name"
-  echo " Build command: $make_cmd"
+  echo " CMake allocator: $allocator"
   echo "============================================================"
 
-  make clean >/dev/null 2>&1
-  eval "$make_cmd" >/dev/null 2>&1
+  cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release \
+    -DEZGRPC2_ALLOCATOR="$allocator" \
+    -DEZGRPC2_BUILD_TESTS=OFF \
+    -DEZGRPC2_BUILD_INTEGRATION_TESTS=OFF >/dev/null
+  cmake --build "$build_dir" --target example_grpc_server --parallel >/dev/null 2>&1
 
-  ./examples/python_client_c_server/server.bin $PORT 1 >/dev/null 2>&1 &
+  "$build_dir/server.bin" $PORT 1 >/dev/null 2>&1 &
   SERVER_PID=$!
   sleep 1
 
@@ -58,13 +62,13 @@ run_test() {
 }
 
 # 1. Standard libc allocator
-run_test "Standard libc (glibc)" "make"
+run_test "Standard libc (glibc)" "default"
 
 # 2. Microsoft mimalloc
-run_test "Microsoft mimalloc" "make MIMALLOC=1"
+run_test "Microsoft mimalloc" "mimalloc"
 
 # 3. Jemalloc
-run_test "jemalloc" "make JEMALLOC=1"
+run_test "jemalloc" "jemalloc"
 
 echo "============================================================"
 echo " Benchmarks Completed Successfully!"

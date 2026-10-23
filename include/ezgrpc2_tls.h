@@ -7,7 +7,7 @@
 /**
  * TLS is enabled with ezgrpc2_config.tls. The library is built with one of
  * OpenSSL, LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS or rustls
- * (``make TLS=...``). For settings ezgrpc2 does not expose,
+ * (``-DEZGRPC2_TLS_BACKEND=...`` in CMake). For settings ezgrpc2 does not expose,
  * ezgrpc2_server_tls_native() returns the library's own context:
  *
  *   * OpenSSL, LibreSSL, BoringSSL, AWS-LC: ``SSL_CTX *``

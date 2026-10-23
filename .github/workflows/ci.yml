@@ -38,6 +38,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            cmake \
             pkg-config \
             libnghttp2-dev \
             zlib1g-dev \
@@ -59,20 +60,14 @@ jobs:
 
       - name: Build ezgrpc2 and examples
         run: |
-          make clean
-          make CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
+            -DEZGRPC2_ALLOCATOR=${{ matrix.allocator }}
+          cmake --build build --parallel 2
 
-      - name: Run unit tests
+      - name: Run unit and integration tests
         run: |
-          make -C src/tests test CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
-
-      - name: Run Python client integration tests (Cleartext h2c)
-        run: |
-          make -C examples/python_client_c_server test CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
-
-      - name: Run Python client integration tests (TLS / SSL h2)
-        run: |
-          make -C examples/python_client_c_server test-tls CC=${{ matrix.compiler }} ALLOCATOR=${{ matrix.allocator }}
+          ctest --test-dir build --output-on-failure
 
   sanitizers:
     name: ASAN / ${{ matrix.compiler }}
@@ -96,6 +91,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            cmake \
             pkg-config \
             libnghttp2-dev \
             zlib1g-dev \
@@ -115,11 +111,11 @@ jobs:
 
       - name: Build and test under AddressSanitizer
         run: |
-          make clean
-          make CC=${{ matrix.compiler }} ASAN=1
-          make -C src/tests test CC=${{ matrix.compiler }} ASAN=1
-          make -C examples/python_client_c_server test CC=${{ matrix.compiler }} ASAN=1
-          make -C examples/python_client_c_server test-tls CC=${{ matrix.compiler }} ASAN=1
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
+            -DEZGRPC2_ASAN=ON
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
 
   tls-backends:
     name: TLS / ${{ matrix.tls }}
@@ -179,21 +175,13 @@ jobs:
         if: matrix.tls != 'wolfssl' && matrix.tls != 'gnutls' && steps.tls-cache.outputs.cache-hit != 'true'
         run: scripts/build-tls-backend.sh ${{ matrix.tls }} "$TLS_PREFIX_DIR" "$RUNNER_TEMP/tls-src"
 
-      - name: Select the TLS library
-        run: |
-          if [ "${{ matrix.tls }}" = wolfssl ] || [ "${{ matrix.tls }}" = gnutls ]; then
-            echo "TLS_ARGS=TLS=${{ matrix.tls }}" >> "$GITHUB_ENV"
-          else
-            echo "TLS_ARGS=TLS=${{ matrix.tls }} TLS_PREFIX=$TLS_PREFIX_DIR" >> "$GITHUB_ENV"
-          fi
-
       - name: Build and test
         run: |
-          make clean
-          make $TLS_ARGS
-          make -C src/tests test $TLS_ARGS
-          make -C examples/python_client_c_server test $TLS_ARGS
-          make -C examples/python_client_c_server test-tls $TLS_ARGS
+          cmake -S . -B build \
+            -DEZGRPC2_TLS_BACKEND=${{ matrix.tls }} \
+            -DEZGRPC2_TLS_PREFIX="$TLS_PREFIX_DIR"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
 
   flatbuffers:
     name: FlatBuffers / ${{ matrix.compiler }}${{ matrix.asan == '1' && ' / ASAN' || '' }}
@@ -256,8 +244,10 @@ jobs:
 
       - name: Build and test
         run: |
-          ARGS="CC=${{ matrix.compiler }} ASAN=${{ matrix.asan }} FLATCC=1 FLATCC_PREFIX=$FLATCC_PREFIX_DIR"
-          make clean
-          make $ARGS
-          make -C src/tests test $ARGS
-          make -C examples/flatbuffers test $ARGS
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
+            -DEZGRPC2_ASAN=${{ matrix.asan == '1' && 'ON' || 'OFF' }} \
+            -DEZGRPC2_FLATCC=ON \
+            -DEZGRPC2_FLATCC_PREFIX="$FLATCC_PREFIX_DIR"
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure

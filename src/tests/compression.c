@@ -8,6 +8,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
+#if defined(EZGRPC2_ENABLE_ZLIB)
 void test_gzip_compression_roundtrip(void) {
   const char *sample = "Hello World! This is a test message to verify RFC 1952 gzip compression "
                        "and decompression with zlib.";
@@ -56,11 +57,15 @@ void test_message_compress_decompress(void) {
   ezgrpc2_message_free(comp);
   ezgrpc2_message_free(decomp);
 }
+#endif
 
+#if defined(EZGRPC2_ENABLE_ZLIB) || defined(EZGRPC2_ENABLE_ZSTD) || defined(EZGRPC2_ENABLE_SNAPPY)
 void test_configurable_codecs_roundtrip(void) {
   const char sample[] = "codec selection and level configuration round trip";
   const ezgrpc2_compression_algorithm algorithms[] = {
+#if defined(EZGRPC2_ENABLE_ZLIB)
       EZGRPC2_COMPRESS_GZIP, EZGRPC2_COMPRESS_DEFLATE,
+#endif
 #if defined(EZGRPC2_ENABLE_ZSTD)
       EZGRPC2_COMPRESS_ZSTD,
 #endif
@@ -85,11 +90,16 @@ void test_configurable_codecs_roundtrip(void) {
     ezgrpc2_free(unpacked);
   }
 }
+#endif
 
 int main(void) {
   UNITY_BEGIN();
+#if defined(EZGRPC2_ENABLE_ZLIB)
   RUN_TEST(test_gzip_compression_roundtrip);
   RUN_TEST(test_message_compress_decompress);
+#endif
+#if defined(EZGRPC2_ENABLE_ZLIB) || defined(EZGRPC2_ENABLE_ZSTD) || defined(EZGRPC2_ENABLE_SNAPPY)
   RUN_TEST(test_configurable_codecs_roundtrip);
+#endif
   return UNITY_END();
 }

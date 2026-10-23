@@ -95,6 +95,7 @@ Numbers depend on hardware and on the client. A single `ghz` process with its de
 
 - **Platform**: Linux.
 - **Compiler**: GCC 11+ or Clang 14+ with C23 support (`-std=c23`, or `-std=c2x` on older compilers).
+- **Build system**: CMake 3.20 or newer.
 - **Required libraries**:
   - `libuv` (event loop)
   - `libnghttp2` (HTTP/2)
@@ -130,26 +131,28 @@ The sources are laid out as:
 | Directory | Contents |
 |:---|:---|
 | `include/` | All headers. Applications include `ezgrpc2.h` |
-| `src/` | Library sources (`.c`) and build output |
+| `src/` | Library sources (`.c`) |
 | `src/tests/` | Unit tests |
 | `examples/` | Example servers and the Python integration tests |
 
-Build the static library (`src/libezgrpc2.a`), the shared library (`src/libezgrpc2.so`) and the examples:
+Configure and build the static library, shared library and available examples:
 
 ```bash
-make
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
 ```
 
-To build your own server against it, add `include/` to the include path and link the library with its dependencies:
+Run the registered unit and integration tests with:
 
 ```bash
-cc -std=c23 -D_GNU_SOURCE -Iinclude my_server.c -o my_server \
-  -Lsrc -l:libezgrpc2.a -luv -lnghttp2 -luuid -lpthread -lssl -lcrypto -lz -lzstd -lsnappy
+ctest --test-dir build --output-on-failure
 ```
+
+The CMake targets are `ezgrpc2_static` and `ezgrpc2_shared`. The `ezgrpc2::ezgrpc2` alias selects the static library and carries its required link dependencies.
 
 ### Compression
 
-The previous implementation provided gzip helpers only. Gzip and deflate both use zlib; deflate uses the zlib-wrapped DEFLATE stream used by gRPC. Zstandard (`zstd`) and Snappy (`snappy`) are detected at build time when their development libraries are installed. Set `ZSTD=0` or `SNAPPY=0` to disable either optional codec.
+The previous implementation provided gzip helpers only. Gzip and deflate both use zlib; deflate uses the zlib-wrapped DEFLATE stream used by gRPC. Zstandard (`zstd`) and Snappy (`snappy`) are detected at build time when their development libraries are installed. Set `-DEZGRPC2_ZSTD=OFF` or `-DEZGRPC2_SNAPPY=OFF` to disable either optional codec.
 
 Compression remains explicit and per message. The server sends the corresponding `grpc-encoding` header when the first response message is compressed, and advertises the codecs enabled in that build. For example:
 
@@ -170,29 +173,30 @@ Add `-lprotobuf-c` when the Protobuf-C helpers are built, `-lflatccrt` when the 
 
 ### Build options
 
-| Command | Description |
+| CMake setting or command | Description |
 |:---|:---|
-| `make test` | Builds and runs the unit tests and the Python integration tests (cleartext and TLS) |
-| `make MIMALLOC=1` | Uses `mimalloc` |
-| `make JEMALLOC=1` | Uses `jemalloc` |
-| `make ALLOCATOR=custom` | Allocator set at runtime with `ezgrpc2_set_allocator()` |
-| `make TLS=<backend>` | Selects the TLS library: `openssl` (default when installed), `libressl`, `boringssl`, `awslc`, `wolfssl`, `gnutls`, `rustls` or `none` |
-| `make TLS_PREFIX=<dir>` | Uses a TLS library installed in `<dir>/include` and `<dir>/lib` |
-| `make PROTOBUF_C=0` | Disables the Protobuf-C helpers (enabled when `protobuf-c` is found) |
-| `make FLATCC=0` | Disables the FlatBuffers helpers (enabled when `flatcc` is found) |
-| `make FLATCC_PREFIX=<dir>` | Uses a flatcc installed in `<dir>` (`bin/flatcc`, `include/flatcc`, `lib/libflatccrt.a`) |
-| `make D=1` | Debug build: `-ggdb3`, no optimization, debug logging |
-| `make T=1` | Trace logging of every HTTP/2 frame (slow) |
-| `make ASAN=1` | AddressSanitizer build |
-| `make format` | Formats the C sources with `clang-format` |
-| `make format-check` | Fails if any C source is not formatted |
-| `make clean` | Removes build output |
+| `cmake --build build --target check` | Builds and runs registered unit and integration tests |
+| `-DEZGRPC2_ALLOCATOR=mimalloc` | Uses `mimalloc`; also accepts `jemalloc` or `default` |
+| `-DEZGRPC2_TLS_BACKEND=<backend>` | Selects `AUTO`, `openssl`, `libressl`, `boringssl`, `awslc`, `wolfssl`, `gnutls`, `rustls` or `none` |
+| `-DEZGRPC2_TLS_PREFIX=<dir>` | Searches `<dir>` for the selected TLS library |
+| `-DEZGRPC2_PROTOBUF_C=OFF` | Disables Protobuf-C helpers; `AUTO` detects them, `ON` requires them |
+| `-DEZGRPC2_FLATCC=OFF` | Disables FlatBuffers helpers; `AUTO` detects them, `ON` requires them |
+| `-DEZGRPC2_FLATCC_PREFIX=<dir>` | Searches `<dir>/bin`, `include` and `lib` for flatcc |
+| `-DEZGRPC2_ZLIB=OFF`, `-DEZGRPC2_ZSTD=OFF`, `-DEZGRPC2_SNAPPY=OFF` | Disable optional codecs; each accepts `AUTO`, `ON` or `OFF` |
+| `-DEZGRPC2_DEBUG_LOGS=ON` | Enables debug logging and debug symbols |
+| `-DEZGRPC2_TRACE=ON` | Enables trace logging of every HTTP/2 frame |
+| `-DEZGRPC2_ASAN=ON` | Builds with AddressSanitizer |
+| `-DEZGRPC2_BUILD_INTEGRATION_TESTS=OFF` | Skips Python client integration tests |
+| `-DEZGRPC2_BUILD_EXAMPLES=OFF` | Skips example server targets |
+| `cmake --build build --target format` | Formats C sources with `clang-format` |
+| `cmake --build build --target format-check` | Checks C formatting with `clang-format` |
+| `cmake --build build --target clean` | Removes build output |
 
 ### TLS backends
 
-Exactly one TLS library is compiled in, selected with `TLS=`. Run `make clean` when switching. The versions listed are the ones the test suite has been run against.
+Exactly one TLS library is compiled in, selected with `EZGRPC2_TLS_BACKEND`. Use a separate build directory when switching backends. The versions listed are the ones the test suite has been run against.
 
-| `TLS=` | Library | How to get it | Notes |
+| `EZGRPC2_TLS_BACKEND` | Library | How to get it | Notes |
 |:---|:---|:---|:---|
 | `openssl` | OpenSSL 3.0 | `libssl-dev` | Default when installed |
 | `libressl` | LibreSSL 4.3 | `scripts/build-tls-backend.sh libressl <dir>` | |
@@ -207,8 +211,8 @@ LibreSSL, BoringSSL and AWS-LC install the same `openssl/*.h` headers as OpenSSL
 
 ```bash
 scripts/build-tls-backend.sh awslc "$HOME/tls/awslc"
-make clean
-make TLS=awslc TLS_PREFIX="$HOME/tls/awslc"
+cmake -S . -B build-awslc -DEZGRPC2_TLS_BACKEND=awslc -DEZGRPC2_TLS_PREFIX="$HOME/tls/awslc"
+cmake --build build-awslc --parallel
 ```
 
 The build fails if the headers it finds don't belong to the selected library, and the TLS unit test checks that the library linked in is the one requested. At runtime, `ezgrpc2_tls_backend()` and `ezgrpc2_tls_backend_version()` report the library in use.
@@ -432,18 +436,9 @@ if (!ezgrpc2_server_intercept_pre(server, event, "SayHello"))
 Run the tests:
 
 ```bash
-# unit tests
-make -C src/tests test
-
-# Python integration tests, cleartext and TLS
-make -C examples/python_client_c_server test
-make -C examples/python_client_c_server test-tls
-
-# FlatBuffers integration test (when built with FLATCC=1)
-make -C examples/flatbuffers test
-
-# everything
-make test
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
 ---
@@ -455,6 +450,6 @@ Every push and pull request is tested with GitHub Actions ([`.github/workflows/c
 - **OS**: Ubuntu 24.04 and Ubuntu 22.04
 - **Compilers**: GCC and Clang
 - **Allocators**: libc `malloc`, `mimalloc` and `jemalloc`
-- **Sanitizers**: AddressSanitizer builds (`ASAN=1`)
+- **Sanitizers**: AddressSanitizer builds (`EZGRPC2_ASAN=ON`)
 - **FlatBuffers**: flatcc built from source, with GCC, Clang and AddressSanitizer
 - **TLS backends**: LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls, in addition to OpenSSL

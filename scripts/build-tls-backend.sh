@@ -3,7 +3,7 @@
 # installs it into a prefix that the ezgrpc2 build can use:
 #
 #   scripts/build-tls-backend.sh <libressl|boringssl|awslc|rustls> <prefix> [workdir]
-#   make TLS=<backend> TLS_PREFIX=<prefix>
+#   cmake -S . -B build-<backend> -DEZGRPC2_TLS_BACKEND=<backend> -DEZGRPC2_TLS_PREFIX=<prefix>
 #
 # Sources are pinned to a release and verified against a SHA-256 checksum.
 # OpenSSL, wolfSSL and GnuTLS are taken from the system packages instead.

@@ -3,7 +3,7 @@
 # into a prefix that the ezgrpc2 build can use:
 #
 #   scripts/build-flatcc.sh <prefix> [workdir]
-#   make FLATCC_PREFIX=<prefix>
+#   cmake -S . -B build-flatcc -DEZGRPC2_FLATCC=ON -DEZGRPC2_FLATCC_PREFIX=<prefix>
 #
 # The source is pinned to a release and verified against a SHA-256 checksum.
 # The prefix receives bin/flatcc, include/flatcc and lib/libflatccrt.a.

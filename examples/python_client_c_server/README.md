@@ -37,23 +37,25 @@ message HelloReply {
 
 ## Building and Running
 
-1. **Build Everything** (generates protobuf bindings and compiles the C server):
+1. **Configure and build** (generates protobuf bindings and compiles the C server):
    ```bash
-   make
+   cmake -S ../.. -B ../../build -DCMAKE_BUILD_TYPE=Release
+   cmake --build ../../build --target example_grpc_server --parallel
    ```
 
 2. **Automated End-to-End Test**:
    ```bash
-   make test
+   ctest --test-dir ../../build -R integration_grpc_cleartext --output-on-failure
    ```
    This starts the C server in the background, executes the Python client calls, validates the responses, and shuts down the server.
 
 3. **Running Manually**:
    - Terminal 1 (Start C server):
      ```bash
-     make run-server
+     ../../build/server.bin 19009
      ```
    - Terminal 2 (Run Python client):
      ```bash
-     make run-client
+     python3 -m grpc_tools.protoc -I. --python_out=../../build/generated/protobuf-python --grpc_python_out=../../build/generated/protobuf-python helloworld.proto
+     PYTHONPATH=../../build/generated/protobuf-python python3 client.py localhost:19009
      ```
