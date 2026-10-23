@@ -52,7 +52,7 @@ message HelloReply {
 3. **Running Manually**:
    - Terminal 1 (Start C server):
      ```bash
-     ../../build/server.bin 19009
+     ../../build/grpc_server.bin 19009
      ```
    - Terminal 2 (Run Python client):
      ```bash

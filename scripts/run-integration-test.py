@@ -30,7 +30,7 @@ def main():
         server_env["USE_TLS"] = "1"
         server_env["TLS_CERT"] = "server.crt"
 
-    server_log = tempfile.TemporaryFile(mode="w+t")
+    server_log = tempfile.TemporaryFile(mode="w+b")
     server = subprocess.Popen(
         [args.server, args.port], cwd=args.cwd, env=server_env,
         stdout=server_log, stderr=subprocess.STDOUT
@@ -39,7 +39,7 @@ def main():
         time.sleep(1)
         if server.poll() is not None:
             server_log.seek(0)
-            sys.stderr.write(server_log.read())
+            sys.stderr.write(server_log.read().decode("utf-8", errors="backslashreplace"))
             return server.returncode or 1
         client_env = env.copy()
         if args.tls:
@@ -60,7 +60,7 @@ def main():
             server.wait()
         if server.returncode not in (0, -15, 143):
             server_log.seek(0)
-            sys.stderr.write(server_log.read())
+            sys.stderr.write(server_log.read().decode("utf-8", errors="backslashreplace"))
         server_log.close()
 
 

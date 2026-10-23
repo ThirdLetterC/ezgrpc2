@@ -1,6 +1,6 @@
 /* A gRPC server whose messages are FlatBuffers, built and read with flatcc.
  *
- *   ./server.bin [port] [quiet]
+ *   ./flatbuffers_server.bin [port] [quiet]
  */
 #include <signal.h>
 #include <stdio.h>

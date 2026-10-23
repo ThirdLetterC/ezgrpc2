@@ -1,7 +1,7 @@
 /* The Greeter: every kind of gRPC method, served with handlers.
  *
- *   ./server.bin [port] [quiet] [tls] [cert] [key]
- *   THREADS=N ./server.bin   one server (event loop) per thread on the same port
+ *   ./grpc_server.bin [port] [quiet] [tls] [cert] [key]
+ *   THREADS=N ./grpc_server.bin   one server (event loop) per thread on the same port
  */
 #include <pthread.h>
 #include <signal.h>
