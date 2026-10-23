@@ -1,8 +1,5 @@
 # gRPC
 
-> [!NOTE]
-> This repository is under active development; we’re tightening the bolts and refueling the engine! The hangar doors are wide open: you are encouraged to kick the tires, poke the wires, and take it for a spin in your local environment. If you manage to break the sound barrier (or find a bug), please let us know.
-
 **gRPC** is a lightweight, high-performance gRPC server library in C23 for Linux. It is built on [libuv](https://libuv.org/) and [nghttp2](https://nghttp2.org/), and exposes a simple poll-and-handle API: no hidden threads, no code generator, no callback soup. You decide how requests are scheduled, how memory is allocated, and how many cores to use.
 
 ---
