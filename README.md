@@ -11,7 +11,7 @@
 
 - **Poll-based API**: one call (`ezgrpc2_server_poll()`) runs the event loop and returns a batch of events (connections, messages, cancellations, deadlines) for you to handle.
 - **All 4 RPC modes**: unary, server streaming, client streaming and bidirectional streaming.
-- **TLS with ALPN**: HTTP/2 over TLS 1.2+ (OpenSSL), negotiating `h2`.
+- **TLS with ALPN**: HTTP/2 over TLS 1.2 and 1.3, negotiating `h2`. Seven TLS libraries are supported: OpenSSL, LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls (see [TLS backends](#tls-backends)).
 - **Protobuf-C helpers**: optional [`protobuf-c`](https://github.com/protobuf-c/protobuf-c) integration (`EZGRPC2_PB_UNPACK`, `ezgrpc2_pb_create_response`).
 - **Interceptors**: pre-call hooks run with `ezgrpc2_server_intercept_pre()`, post-call hooks with `ezgrpc2_server_intercept_post()`. A built-in Bearer token interceptor is available (`ezgrpc2_interceptor_create_bearer_auth`).
 - **Health checking**: the standard `/grpc.health.v1.Health/Check` service with per-service status.
@@ -48,7 +48,7 @@ Each `ezgrpc2_server` owns one libuv loop, driven by `ezgrpc2_server_poll()`:
 
 - Connections are libuv TCP streams (`uv_tcp_t`). Received bytes go straight from a shared read buffer into nghttp2.
 - `ezgrpc2_server_session_stream_send()`, `..._stream_end()` and similar calls only **queue** frames. At the start of the next `ezgrpc2_server_poll()`, everything queued for a connection (headers, data and trailers of all its streams) is written with a single write. If your next poll may be delayed, call `ezgrpc2_server_flush()`.
-- TLS runs over memory BIOs, so each batch is encrypted with a single `SSL_write()`.
+- The TLS library never touches the socket: ciphertext is passed to and from it in memory, so each batch is encrypted with a single write call and every TLS library is driven the same way.
 
 ### Using more cores
 
@@ -80,7 +80,7 @@ Numbers depend on hardware and on the client. A single `ghz` process with its de
   - `libuuid` (session identifiers)
   - `pthread`
 - **Optional libraries** (detected automatically when installed):
-  - OpenSSL (`libssl`, `libcrypto`) for TLS
+  - A TLS library for TLS: OpenSSL by default, or one of the [other backends](#tls-backends)
   - `zlib` for Gzip compression
   - `protobuf-c` for the Protobuf-C helpers
   - `mimalloc` or `jemalloc` as the allocator (selected at build time)
@@ -133,6 +133,8 @@ Add `-lprotobuf-c` when the Protobuf-C helpers are built, and the allocator libr
 | `make MIMALLOC=1` | Uses `mimalloc` |
 | `make JEMALLOC=1` | Uses `jemalloc` |
 | `make ALLOCATOR=custom` | Allocator set at runtime with `ezgrpc2_set_allocator()` |
+| `make TLS=<backend>` | Selects the TLS library: `openssl` (default when installed), `libressl`, `boringssl`, `awslc`, `wolfssl`, `gnutls`, `rustls` or `none` |
+| `make TLS_PREFIX=<dir>` | Uses a TLS library installed in `<dir>/include` and `<dir>/lib` |
 | `make PROTOBUF_C=0` | Disables the Protobuf-C helpers (enabled when `protobuf-c` is found) |
 | `make D=1` | Debug build: `-ggdb3`, no optimization, debug logging |
 | `make T=1` | Trace logging of every HTTP/2 frame (slow) |
@@ -140,6 +142,33 @@ Add `-lprotobuf-c` when the Protobuf-C helpers are built, and the allocator libr
 | `make format` | Formats the C sources with `clang-format` |
 | `make format-check` | Fails if any C source is not formatted |
 | `make clean` | Removes build output |
+
+### TLS backends
+
+Exactly one TLS library is compiled in, selected with `TLS=`. Run `make clean` when switching. The versions listed are the ones the test suite has been run against.
+
+| `TLS=` | Library | How to get it | Notes |
+|:---|:---|:---|:---|
+| `openssl` | OpenSSL 3.0 | `libssl-dev` | Default when installed |
+| `libressl` | LibreSSL 4.3 | `scripts/build-tls-backend.sh libressl <dir>` | |
+| `boringssl` | BoringSSL 0.20260929.0 | `scripts/build-tls-backend.sh boringssl <dir>` | |
+| `awslc` | AWS-LC 5.10 | `scripts/build-tls-backend.sh awslc <dir>` | |
+| `wolfssl` | wolfSSL 5.6 | `libwolfssl-dev` | Needs ALPN support (`--enable-alpn`). Without `--enable-aesni`, AES runs in software and bulk transfers are much slower |
+| `gnutls` | GnuTLS 3.8 | `libgnutls28-dev` | |
+| `rustls` | rustls via [rustls-ffi](https://github.com/rustls/rustls-ffi) 0.15 | `scripts/build-tls-backend.sh rustls <dir>` (needs a Rust toolchain) | Rejects clients that offer ALPN without `h2` |
+| `none` | | | TLS functions fail at runtime |
+
+LibreSSL, BoringSSL and AWS-LC install the same `openssl/*.h` headers as OpenSSL, so they are used from their own prefix. `scripts/build-tls-backend.sh` downloads a pinned, checksum-verified release, builds it, and installs it into a directory of your choice:
+
+```bash
+scripts/build-tls-backend.sh awslc "$HOME/tls/awslc"
+make clean
+make TLS=awslc TLS_PREFIX="$HOME/tls/awslc"
+```
+
+The build fails if the headers it finds don't belong to the selected library, and the TLS unit test checks that the library linked in is the one requested. At runtime, `ezgrpc2_tls_backend()` and `ezgrpc2_tls_backend_version()` report the library in use.
+
+All backends behave the same way: they load a PEM certificate chain and private key, check that the key matches the certificate, allow TLS 1.2 and 1.3 only, and select `h2` with ALPN. A client that offers no ALPN still connects. For settings ezgrpc2 doesn't expose, `ezgrpc2_tls_ctx_native()` returns the library's own context (`SSL_CTX *`, `WOLFSSL_CTX *`, `gnutls_certificate_credentials_t` or `const struct rustls_server_config *`).
 
 ---
 
@@ -338,6 +367,7 @@ Every push and pull request is tested with GitHub Actions ([`.github/workflows/c
 - **Compilers**: GCC and Clang
 - **Allocators**: libc `malloc`, `mimalloc` and `jemalloc`
 - **Sanitizers**: AddressSanitizer builds (`ASAN=1`)
+- **TLS backends**: LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls, in addition to OpenSSL
 
 ---
 

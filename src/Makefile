@@ -49,6 +49,9 @@ objects += ezgrpc2_session_uuid.o
 objects += ezgrpc2_status_details.o
 objects += ezgrpc2_timeout.o
 objects += ezgrpc2_tls.o
+ifneq ($(TLS),none)
+  objects += ezgrpc2_tls_$(TLS_IMPL).o
+endif
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
 #targets += examples/hello_worldcpp.bin
@@ -59,7 +62,7 @@ libezgrpc2.a : $(objects)
 	$(Q)$(AR) rcs $@ $^
 
 libezgrpc2.so : $(objects)
-	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -luv -o $@
+	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -luv $(TLS_LIBS) -o $@
 
 # -MMD: rebuild objects when a header (e.g. the structs in core.h) changes
 %.o : %.c

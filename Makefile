@@ -34,6 +34,9 @@ help:
 	@echo "  make JEMALLOC=1 all enables jemalloc allocator"
 	@echo "  make ALLOCATOR=name enables specific allocator (default, mimalloc, jemalloc, custom)"
 	@echo "  make PROTOBUF_C=1   enables protobuf-c integration (auto-detected by default)"
+	@echo "  make TLS=name       TLS library: openssl libressl boringssl awslc wolfssl gnutls rustls none"
+	@echo "  make TLS_PREFIX=dir TLS library installed in dir/include and dir/lib"
+	@echo "                      (scripts/build-tls-backend.sh builds libressl, boringssl, awslc, rustls)"
 
 clean :
 	$(MAKE) -C src clean

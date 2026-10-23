@@ -116,3 +116,77 @@ jobs:
           make -C src/tests test CC=${{ matrix.compiler }} ASAN=1
           make -C examples/python_client_c_server test CC=${{ matrix.compiler }} ASAN=1
           make -C examples/python_client_c_server test-tls CC=${{ matrix.compiler }} ASAN=1
+
+  tls-backends:
+    name: TLS / ${{ matrix.tls }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # openssl is covered by the jobs above. wolfssl and gnutls come from
+        # the distribution, the others are built by scripts/build-tls-backend.sh
+        tls: [ libressl, boringssl, awslc, wolfssl, gnutls, rustls ]
+
+    env:
+      TLS_PREFIX_DIR: ${{ github.workspace }}/.tls/${{ matrix.tls }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            cmake \
+            ninja-build \
+            libnghttp2-dev \
+            zlib1g-dev \
+            libssl-dev \
+            uuid-dev \
+            libprotobuf-c-dev \
+            protobuf-c-compiler \
+            protobuf-compiler \
+            libuv1-dev \
+            libwolfssl-dev \
+            libgnutls28-dev
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install grpcio grpcio-tools protobuf
+
+      - name: Cache the TLS library build
+        if: matrix.tls != 'wolfssl' && matrix.tls != 'gnutls'
+        id: tls-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TLS_PREFIX_DIR }}
+          key: tls-${{ matrix.tls }}-${{ runner.os }}-${{ hashFiles('scripts/build-tls-backend.sh') }}
+
+      - name: Build the TLS library
+        if: matrix.tls != 'wolfssl' && matrix.tls != 'gnutls' && steps.tls-cache.outputs.cache-hit != 'true'
+        run: scripts/build-tls-backend.sh ${{ matrix.tls }} "$TLS_PREFIX_DIR" "$RUNNER_TEMP/tls-src"
+
+      - name: Select the TLS library
+        run: |
+          if [ "${{ matrix.tls }}" = wolfssl ] || [ "${{ matrix.tls }}" = gnutls ]; then
+            echo "TLS_ARGS=TLS=${{ matrix.tls }}" >> "$GITHUB_ENV"
+          else
+            echo "TLS_ARGS=TLS=${{ matrix.tls }} TLS_PREFIX=$TLS_PREFIX_DIR" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build and test
+        run: |
+          make clean
+          make $TLS_ARGS
+          make -C src/tests test $TLS_ARGS
+          make -C examples/python_client_c_server test $TLS_ARGS
+          make -C examples/python_client_c_server test-tls $TLS_ARGS

@@ -139,7 +139,7 @@ struct ezgrpc2_session {
   ezgrpc2_stream *streams;
   size_t nb_streams;
 
-  struct ssl_st *ssl;
+  struct ezgrpc2_tls_session *tls;
   bool is_tls : 1;
   bool tls_handshake_done : 1;
 
@@ -218,7 +218,7 @@ struct ezgrpc2_server {
   size_t nb_interceptors;
   ezgrpc2_interceptor *interceptors;
 
-  struct ssl_ctx_st *ssl_ctx;
+  struct ezgrpc2_tls_ctx *tls_ctx;
   bool is_tls : 1;
 };
 

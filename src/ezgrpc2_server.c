@@ -404,10 +404,8 @@ EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
   free(ezserver->sessions);
   free(ezserver->free_sessions);
   free(ezserver->interceptors);
-  if (ezserver->ssl_ctx != nullptr) {
-    ezgrpc2_tls_free_server_ctx(ezserver->ssl_ctx);
-    ezserver->ssl_ctx = nullptr;
-  }
+  ezgrpc2_tls_free_server_ctx(ezserver->tls_ctx);
+  ezserver->tls_ctx = nullptr;
   thpool_cleanup(&ezserver->logger_thread);
   free(ezserver);
 }

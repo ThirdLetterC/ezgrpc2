@@ -69,14 +69,52 @@ LIBUV_LIBS ?= $(shell pkg-config --libs libuv 2>/dev/null || echo "-luv")
 CFLAGS += $(LIBUV_CFLAGS)
 LDFLAGS += $(LIBUV_LIBS)
 
-# OpenSSL TLS support:
-ifeq ($(origin OPENSSL), undefined)
-  OPENSSL := $(shell (pkg-config --exists openssl 2>/dev/null || test -f /usr/include/openssl/ssl.h) && echo 1 || echo 0)
+# TLS backend:
+#   TLS=openssl                      OpenSSL (the default when it is installed)
+#   TLS=libressl|boringssl|awslc     the OpenSSL forks, usually with TLS_PREFIX
+#   TLS=wolfssl|gnutls|rustls        wolfSSL, GnuTLS, rustls (rustls-ffi)
+#   TLS=none                         no TLS (OPENSSL=0 is an alias)
+# TLS_PREFIX=<dir> points at a library installed outside the system paths
+# (<dir>/include and <dir>/lib), e.g. by scripts/build-tls-backend.sh.
+# Run `make clean` after switching backends.
+TLS_BACKENDS = openssl libressl boringssl awslc wolfssl gnutls rustls
+
+ifeq ($(origin TLS), undefined)
+  ifeq ($(OPENSSL),0)
+    TLS := none
+  else
+    TLS := $(shell (pkg-config --exists openssl 2>/dev/null || test -f /usr/include/openssl/ssl.h) && echo openssl || echo none)
+  endif
 endif
 
-ifeq ($(OPENSSL),1)
-  CFLAGS += -DEZGRPC2_ENABLE_OPENSSL
-  LDFLAGS += -lssl -lcrypto
+ifeq ($(filter $(TLS),$(TLS_BACKENDS) none),)
+  $(error unknown TLS backend '$(TLS)'. Use one of: $(TLS_BACKENDS) none)
+endif
+
+# TLS_IMPL names the src/ezgrpc2_tls_<impl>.c that drives the library.
+# TLS_LIBS must follow libezgrpc2.a on the link line.
+ifneq ($(filter $(TLS),openssl libressl boringssl awslc),)
+  TLS_IMPL = openssl
+  TLS_LIBS = -lssl -lcrypto
+else ifeq ($(TLS),wolfssl)
+  TLS_IMPL = wolfssl
+  TLS_LIBS = -lwolfssl
+else ifeq ($(TLS),gnutls)
+  TLS_IMPL = gnutls
+  TLS_LIBS = -lgnutls
+else ifeq ($(TLS),rustls)
+  TLS_IMPL = rustls
+  # librustls.a is a Rust static library and needs these system libraries
+  TLS_LIBS = -lrustls -lgcc_s -lutil -lrt -lpthread -lm -ldl
+endif
+
+ifneq ($(TLS),none)
+  CFLAGS += -DEZGRPC2_ENABLE_TLS -DEZGRPC2_TLS_$(shell echo $(TLS) | tr a-z A-Z)
+endif
+
+ifneq ($(TLS_PREFIX),)
+  CFLAGS += -I$(TLS_PREFIX)/include
+  TLS_LIBS := -L$(TLS_PREFIX)/lib -Wl,-rpath,$(TLS_PREFIX)/lib $(TLS_LIBS)
 endif
 
 CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)

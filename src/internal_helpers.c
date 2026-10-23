@@ -13,7 +13,7 @@
 #include "internal_nghttp2_callbacks.h"
 #include "internal_helpers.h"
 #include "ezgrpc2_events_struct.h"
-#include "ezgrpc2_tls.h"
+#include "internal_tls.h"
 
 int makenonblock(int sockfd) {
   int res = fcntl(sockfd, F_GETFL, 0);

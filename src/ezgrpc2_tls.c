@@ -1,71 +1,39 @@
+/* The TLS backend independent part: the public API and the per-session
+ * plumbing. The TLS library itself is driven by src/ezgrpc2_tls_<backend>.c */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include "ezgrpc2_tls.h"
 #include "ezgrpc2_server.h"
-#include <limits.h>
 #include "core.h"
-#include "internal_helpers.h"
+#include "internal_tls.h"
 
-#if defined(EZGRPC2_ENABLE_OPENSSL)
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#if defined(EZGRPC2_ENABLE_TLS)
 
-static int alpn_select_cb([[maybe_unused]] SSL *ssl, const unsigned char **out,
-                          unsigned char *outlen, const unsigned char *in, unsigned int inlen,
-                          [[maybe_unused]] void *arg) {
-  // HTTP/2 ALPN token is "\x02h2"
-  static const unsigned char h2_proto[] = "\x02h2";
-  if (SSL_select_next_proto((unsigned char **)out, outlen, h2_proto, sizeof(h2_proto) - 1, in,
-                            inlen) != OPENSSL_NPN_NEGOTIATED) {
-    return SSL_TLSEXT_ERR_NOACK;
-  }
-  return SSL_TLSEXT_ERR_OK;
-}
-
-EZGRPC2_API SSL_CTX *ezgrpc2_tls_init_server_ctx(const char *cert_file, const char *key_file) {
+EZGRPC2_API ezgrpc2_tls_ctx *ezgrpc2_tls_init_server_ctx(const char *cert_file,
+                                                         const char *key_file) {
   if (cert_file == nullptr || key_file == nullptr) {
     return nullptr;
   }
-
-  const SSL_METHOD *method = TLS_server_method();
-  SSL_CTX *ctx = SSL_CTX_new(method);
-  if (ctx == nullptr) {
-    return nullptr;
-  }
-
-  // Require modern TLS 1.2+
-  SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
-
-  // Set ALPN negotiation for HTTP/2 ("h2")
-  SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, nullptr);
-
-  // Load certificate chain
-  if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
-    SSL_CTX_free(ctx);
-    return nullptr;
-  }
-
-  // Load private key
-  if (SSL_CTX_use_PrivateKey_file(ctx, key_file, SSL_FILETYPE_PEM) <= 0) {
-    SSL_CTX_free(ctx);
-    return nullptr;
-  }
-
-  // Verify private key matches certificate
-  if (!SSL_CTX_check_private_key(ctx)) {
-    SSL_CTX_free(ctx);
-    return nullptr;
-  }
-
-  return ctx;
+  return tls_backend_ctx_new(cert_file, key_file);
 }
 
-EZGRPC2_API void ezgrpc2_tls_free_server_ctx(SSL_CTX *ctx) {
+EZGRPC2_API void ezgrpc2_tls_free_server_ctx(ezgrpc2_tls_ctx *ctx) {
   if (ctx != nullptr) {
-    SSL_CTX_free(ctx);
+    tls_backend_ctx_free(ctx);
   }
+}
+
+EZGRPC2_API void *ezgrpc2_tls_ctx_native(ezgrpc2_tls_ctx *ctx) {
+  return ctx != nullptr ? tls_backend_ctx_native(ctx) : nullptr;
+}
+
+EZGRPC2_API const char *ezgrpc2_tls_backend(void) {
+  return tls_backend_name();
+}
+
+EZGRPC2_API const char *ezgrpc2_tls_backend_version(void) {
+  return tls_backend_version();
 }
 
 EZGRPC2_API int ezgrpc2_server_enable_tls(ezgrpc2_server *server, const char *cert_file,
@@ -74,172 +42,112 @@ EZGRPC2_API int ezgrpc2_server_enable_tls(ezgrpc2_server *server, const char *ce
     return 1;
   }
 
-  SSL_CTX *ctx = ezgrpc2_tls_init_server_ctx(cert_file, key_file);
+  ezgrpc2_tls_ctx *ctx = ezgrpc2_tls_init_server_ctx(cert_file, key_file);
   if (ctx == nullptr) {
     return 2;
   }
 
-  if (server->ssl_ctx != nullptr) {
-    SSL_CTX_free(server->ssl_ctx);
-  }
-
-  server->ssl_ctx = ctx;
+  ezgrpc2_tls_free_server_ctx(server->tls_ctx);
+  server->tls_ctx = ctx;
   server->is_tls = 1;
   return 0;
 }
 
 int ezgrpc2_tls_session_init(ezgrpc2_session *session) {
   if (session == nullptr || session->server == nullptr || !session->server->is_tls ||
-      session->server->ssl_ctx == nullptr) {
+      session->server->tls_ctx == nullptr) {
     return 0;
   }
 
-  SSL *ssl = SSL_new(session->server->ssl_ctx);
-  if (ssl == nullptr) {
+  ezgrpc2_tls_session *tls = tls_backend_session_new(session->server->tls_ctx);
+  if (tls == nullptr) {
     return 1;
   }
 
-  BIO *rbio = BIO_new(BIO_s_mem());
-  BIO *wbio = BIO_new(BIO_s_mem());
-  if (rbio == nullptr || wbio == nullptr) {
-    BIO_free(rbio);
-    BIO_free(wbio);
-    SSL_free(ssl);
-    return 1;
-  }
-  /* an empty read BIO means "wait for more data", not EOF */
-  BIO_set_mem_eof_return(rbio, -1);
-  SSL_set_bio(ssl, rbio, wbio);
-  SSL_set_accept_state(ssl);
-
-  session->ssl = ssl;
+  session->tls = tls;
   session->is_tls = 1;
   session->tls_handshake_done = 0;
   return 0;
 }
 
 int ezgrpc2_tls_feed(ezgrpc2_session *session, const void *buf, size_t len) {
-  if (session == nullptr || session->ssl == nullptr) {
+  if (session == nullptr || session->tls == nullptr) {
     return 1;
   }
-  BIO *rbio = SSL_get_rbio(session->ssl);
-  while (len > 0) {
-    int n = BIO_write(rbio, buf, len > INT_MAX ? INT_MAX : (int)len);
-    if (n <= 0) {
-      return 1;
-    }
-    buf = (const u8 *)buf + n;
-    len -= (size_t)n;
-  }
-  return 0;
+  return tls_backend_feed(session->tls, buf, len);
 }
 
 int ezgrpc2_tls_drain(ezgrpc2_session *session, ezgrpc2_buf *out) {
-  if (session == nullptr || session->ssl == nullptr) {
+  if (session == nullptr || session->tls == nullptr) {
     return 1;
   }
-  BIO *wbio = SSL_get_wbio(session->ssl);
-  size_t pending;
-  while ((pending = BIO_ctrl_pending(wbio)) > 0) {
-    if (buf_reserve(out, pending)) {
-      return 1;
-    }
-    int n = BIO_read(wbio, out->data + out->len, pending > INT_MAX ? INT_MAX : (int)pending);
-    if (n <= 0) {
-      return 1;
-    }
-    out->len += (size_t)n;
-  }
-  return 0;
+  return tls_backend_drain(session->tls, out);
 }
 
 int ezgrpc2_tls_handshake(ezgrpc2_session *session) {
-  if (session == nullptr || !session->is_tls || session->ssl == nullptr) {
-    return 1;
+  if (session == nullptr || session->tls == nullptr) {
+    return -1;
   }
   if (session->tls_handshake_done) {
     return 1;
   }
 
-  int ret = SSL_do_handshake(session->ssl);
-  if (ret == 1) {
+  int res = tls_backend_handshake(session->tls);
+  if (res == 1) {
     session->tls_handshake_done = 1;
-    return 1;
   }
-
-  int err = SSL_get_error(session->ssl, ret);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-    return 0;
-  }
-
-  return -1;
+  return res;
 }
 
 ssize_t ezgrpc2_tls_read(ezgrpc2_session *session, void *buf, size_t len) {
-  if (session == nullptr || !session->is_tls || session->ssl == nullptr) {
+  if (session == nullptr || session->tls == nullptr) {
     return -1;
   }
-
-  int ret = SSL_read(session->ssl, buf, (int)len);
-  if (ret > 0) {
-    return (ssize_t)ret;
-  }
-
-  int err = SSL_get_error(session->ssl, ret);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-    return -2;
-  }
-  if (err == SSL_ERROR_ZERO_RETURN) {
-    return 0;
-  }
-
-  return -1;
+  return tls_backend_read(session->tls, buf, len);
 }
 
 ssize_t ezgrpc2_tls_write(ezgrpc2_session *session, const void *buf, size_t len) {
-  if (session == nullptr || !session->is_tls || session->ssl == nullptr) {
+  if (session == nullptr || session->tls == nullptr) {
     return -1;
   }
-
-  int ret = SSL_write(session->ssl, buf, (int)len);
-  if (ret > 0) {
-    return (ssize_t)ret;
-  }
-
-  int err = SSL_get_error(session->ssl, ret);
-  if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-    return -2;
-  }
-  if (err == SSL_ERROR_ZERO_RETURN) {
-    return 0;
-  }
-
-  return -1;
+  return tls_backend_write(session->tls, buf, len);
 }
 
 void ezgrpc2_tls_close_notify(ezgrpc2_session *session) {
-  if (session != nullptr && session->ssl != nullptr) {
-    (void)SSL_shutdown(session->ssl);
+  if (session != nullptr && session->tls != nullptr) {
+    tls_backend_close_notify(session->tls);
   }
 }
 
 void ezgrpc2_tls_session_free(ezgrpc2_session *session) {
-  if (session != nullptr && session->ssl != nullptr) {
-    SSL_free(session->ssl);
-    session->ssl = nullptr;
+  if (session != nullptr && session->tls != nullptr) {
+    tls_backend_session_free(session->tls);
+    session->tls = nullptr;
     session->is_tls = 0;
     session->tls_handshake_done = 0;
   }
 }
 
-#else
+#else /* built without TLS */
 
-EZGRPC2_API SSL_CTX *ezgrpc2_tls_init_server_ctx([[maybe_unused]] const char *cert_file,
-                                                 [[maybe_unused]] const char *key_file) {
+EZGRPC2_API ezgrpc2_tls_ctx *ezgrpc2_tls_init_server_ctx([[maybe_unused]] const char *cert_file,
+                                                         [[maybe_unused]] const char *key_file) {
   return nullptr;
 }
 
-EZGRPC2_API void ezgrpc2_tls_free_server_ctx([[maybe_unused]] SSL_CTX *ctx) {}
+EZGRPC2_API void ezgrpc2_tls_free_server_ctx([[maybe_unused]] ezgrpc2_tls_ctx *ctx) {}
+
+EZGRPC2_API void *ezgrpc2_tls_ctx_native([[maybe_unused]] ezgrpc2_tls_ctx *ctx) {
+  return nullptr;
+}
+
+EZGRPC2_API const char *ezgrpc2_tls_backend(void) {
+  return "none";
+}
+
+EZGRPC2_API const char *ezgrpc2_tls_backend_version(void) {
+  return "";
+}
 
 EZGRPC2_API int ezgrpc2_server_enable_tls([[maybe_unused]] ezgrpc2_server *server,
                                           [[maybe_unused]] const char *cert_file,
@@ -262,7 +170,7 @@ int ezgrpc2_tls_drain([[maybe_unused]] ezgrpc2_session *session,
 }
 
 int ezgrpc2_tls_handshake([[maybe_unused]] ezgrpc2_session *session) {
-  return 1;
+  return -1;
 }
 
 ssize_t ezgrpc2_tls_read([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] void *buf,

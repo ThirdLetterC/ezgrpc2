@@ -2,9 +2,13 @@
 
 CFLAGS += -I./unity -I../../include
 
-EZGRPC2_LIBS = -L.. -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -luuid -luv
+EZGRPC2_LIBS = -L.. -l:libezgrpc2.a -lnghttp2 -lz $(TLS_LIBS) -lpthread -luuid -luv
 
-PROGS = list pthpool mem roadmap metadata timeout compression health interceptor status_details reflection tls
+PROGS = list pthpool mem roadmap metadata timeout compression health interceptor status_details reflection
+
+ifneq ($(TLS),none)
+  PROGS += tls
+endif
 
 ifeq ($(PROTOBUF_C),1)
   PROGS += pb
@@ -72,8 +76,9 @@ reflection: reflection.o unity/unity.o ../libezgrpc2.a
 test_cert.pem test_key.pem:
 	openssl req -x509 -newkey rsa:2048 -nodes -keyout test_key.pem -out test_cert.pem -days 365 -subj "/CN=localhost" 2>/dev/null
 
+# the test checks that the library was built with the requested backend
 tls.o: tls.c
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) -DEXPECTED_TLS_BACKEND=\"$(TLS)\" $< -o $@
 
 tls: tls.o unity/unity.o ../libezgrpc2.a test_cert.pem test_key.pem
 	$(CC) $(CFLAGS) tls.o unity/unity.o $(EZGRPC2_LIBS) $(LDFLAGS) -o $@
@@ -102,7 +107,9 @@ test: all
 	./interceptor
 	./status_details
 	./reflection
+ifneq ($(TLS),none)
 	./tls
+endif
 ifeq ($(PROTOBUF_C),1)
 	./pb
 endif

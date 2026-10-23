@@ -38,3 +38,4 @@ src/tests/test_cert.pem
 src/tests/test_key.pem
 examples/python_client_c_server/server.crt
 examples/python_client_c_server/server.key
+.tls/

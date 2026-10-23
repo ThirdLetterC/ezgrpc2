@@ -8,15 +8,26 @@
 void setUp(void) {}
 void tearDown(void) {}
 
+void test_tls_backend(void) {
+  /* the library must be built with the backend the build asked for */
+  TEST_ASSERT_EQUAL_STRING(EXPECTED_TLS_BACKEND, ezgrpc2_tls_backend());
+  TEST_ASSERT_NOT_NULL(ezgrpc2_tls_backend_version());
+  TEST_ASSERT_TRUE(strlen(ezgrpc2_tls_backend_version()) > 0);
+  printf("TLS backend: %s (%s)\n", ezgrpc2_tls_backend(), ezgrpc2_tls_backend_version());
+}
+
 void test_tls_invalid_args(void) {
   TEST_ASSERT_NULL(ezgrpc2_tls_init_server_ctx(nullptr, nullptr));
   TEST_ASSERT_NULL(ezgrpc2_tls_init_server_ctx("nonexistent_cert.pem", "nonexistent_key.pem"));
+  /* a key that does not belong to the certificate */
+  TEST_ASSERT_NULL(ezgrpc2_tls_init_server_ctx("test_cert.pem", "test_cert.pem"));
   TEST_ASSERT_EQUAL_INT(1, ezgrpc2_server_enable_tls(nullptr, "cert.pem", "key.pem"));
 }
 
 void test_tls_init_and_enable(void) {
-  SSL_CTX *ctx = ezgrpc2_tls_init_server_ctx("test_cert.pem", "test_key.pem");
+  ezgrpc2_tls_ctx *ctx = ezgrpc2_tls_init_server_ctx("test_cert.pem", "test_key.pem");
   TEST_ASSERT_NOT_NULL(ctx);
+  TEST_ASSERT_NOT_NULL(ezgrpc2_tls_ctx_native(ctx));
   ezgrpc2_tls_free_server_ctx(ctx);
 
   ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19996, nullptr, 0, 16, nullptr, nullptr);
@@ -38,6 +49,7 @@ void test_server_new_tls(void) {
 
 int main(void) {
   UNITY_BEGIN();
+  RUN_TEST(test_tls_backend);
   RUN_TEST(test_tls_invalid_args);
   RUN_TEST(test_tls_init_and_enable);
   RUN_TEST(test_server_new_tls);
