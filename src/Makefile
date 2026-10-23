@@ -43,9 +43,7 @@ ifeq ($(PROTOBUF_C),1)
   objects += ezgrpc2_protobuf_c.o
 endif
 objects += ezgrpc2_message.o
-#objects += ezgrpc2_messages.o
 objects += ezgrpc2_pthpool.o
-#objects += ezgrpc2_ring.o
 objects += ezgrpc2_reflection.o
 objects += ezgrpc2_server.o
 objects += ezgrpc2_server_settings.o
