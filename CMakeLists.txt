@@ -462,11 +462,14 @@ if(GRPC_BUILD_TESTS)
   endif()
 
   if(GRPC_TLS_ENABLED)
-    find_program(OPENSSL_EXECUTABLE openssl REQUIRED)
+    # Certificate generation needs a host openssl command. Do not search the
+    # selected TLS prefix: AWS-LC's installed CLI can resolve against an
+    # incompatible system libssl at runtime.
+    find_program(GRPC_HOST_OPENSSL_EXECUTABLE NAMES openssl REQUIRED NO_CMAKE_PATH)
     set(tls_test_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/tls-tests")
     file(MAKE_DIRECTORY "${tls_test_dir}")
     add_custom_command(OUTPUT "${tls_test_dir}/test_cert.pem" "${tls_test_dir}/test_key.pem"
-      COMMAND "${OPENSSL_EXECUTABLE}" req -batch -x509 -newkey rsa:2048 -nodes -keyout "${tls_test_dir}/test_key.pem" -out "${tls_test_dir}/test_cert.pem" -days 365 -subj /CN=localhost
+      COMMAND "${GRPC_HOST_OPENSSL_EXECUTABLE}" req -batch -x509 -newkey rsa:2048 -nodes -keyout "${tls_test_dir}/test_key.pem" -out "${tls_test_dir}/test_cert.pem" -days 365 -subj /CN=localhost
       VERBATIM)
     add_custom_target(test_tls_certificates DEPENDS "${tls_test_dir}/test_cert.pem" "${tls_test_dir}/test_key.pem")
     add_executable(test_tls src/tests/tls.c src/tests/unity/unity.c)
@@ -520,9 +523,9 @@ if(GRPC_BUILD_EXAMPLES)
     list(APPEND GRPC_EXAMPLE_TARGETS example_grpc_server)
 
     if(GRPC_TLS_ENABLED AND GRPC_BUILD_INTEGRATION_TESTS)
-      find_program(OPENSSL_EXECUTABLE openssl REQUIRED)
+      find_program(GRPC_HOST_OPENSSL_EXECUTABLE NAMES openssl REQUIRED NO_CMAKE_PATH)
       add_custom_command(OUTPUT "${proto_example_dir}/server.crt" "${proto_example_dir}/server.key"
-        COMMAND "${OPENSSL_EXECUTABLE}" req -batch -x509 -newkey rsa:2048 -nodes -keyout "${proto_example_dir}/server.key" -out "${proto_example_dir}/server.crt" -days 365 -subj /CN=localhost
+        COMMAND "${GRPC_HOST_OPENSSL_EXECUTABLE}" req -batch -x509 -newkey rsa:2048 -nodes -keyout "${proto_example_dir}/server.key" -out "${proto_example_dir}/server.crt" -days 365 -subj /CN=localhost
         VERBATIM)
       add_custom_target(example_tls_certificates DEPENDS "${proto_example_dir}/server.crt" "${proto_example_dir}/server.key")
       add_dependencies(example_grpc_server example_tls_certificates)
