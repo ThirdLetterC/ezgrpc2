@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 #include "ezgrpc2_timeout.h"
 #include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
+#include "ulog/ulog.h"
 
 #define DEFAULT_BACKLOG                1024
 #define DEFAULT_MAX_CONNECTIONS        1024
@@ -18,8 +20,103 @@
 
 /* ---- logging ------------------------------------------------------------------ */
 
+static pthread_mutex_t ulog_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t log_registry_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t log_level_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_once_t logger_once = PTHREAD_ONCE_INIT;
+static ezgrpc2_server *log_registry;
+static atomic_uint_fast64_t next_log_topic = 1;
+static ulog_output_id log_output = ULOG_OUTPUT_INVALID;
+static ulog_status logger_status = ULOG_STATUS_ERROR;
+
+static ulog_status logger_lock(bool lock, void *arg) {
+  (void)arg;
+  int rc = lock ? pthread_mutex_lock(&ulog_mutex) : pthread_mutex_unlock(&ulog_mutex);
+  return rc == 0 ? ULOG_STATUS_OK : ULOG_STATUS_BUSY;
+}
+
+static void logger_output(ulog_event *event, void *arg) {
+  (void)arg;
+  int topic_id = ulog_event_get_topic(event);
+  char message[1024];
+  if (topic_id == ULOG_TOPIC_ID_INVALID ||
+      ulog_event_get_message(event, message, sizeof(message)) != ULOG_STATUS_OK)
+    return;
+
+  pthread_mutex_lock(&log_registry_mutex);
+  ezgrpc2_server *server = log_registry;
+  while (server != nullptr && server->log_topic_id != topic_id)
+    server = server->log_registry_next;
+  if (server != nullptr)
+    (void)fwrite(message, 1, strlen(message), server->log_file);
+  pthread_mutex_unlock(&log_registry_mutex);
+}
+
+static void logger_initialize(void) {
+  if (ulog_lock_set_fn(logger_lock, nullptr) != ULOG_STATUS_OK)
+    return;
+  log_output = ulog_output_add(logger_output, nullptr, ULOG_LEVEL_TRACE);
+  logger_status = log_output == ULOG_OUTPUT_INVALID ? ULOG_STATUS_ERROR : ULOG_STATUS_OK;
+}
+
+static ulog_level ulog_level_for(ezgrpc2_log_level level) {
+  switch (level) {
+  case EZGRPC2_LOG_TRACE:
+    return ULOG_LEVEL_TRACE;
+  case EZGRPC2_LOG_DEBUG:
+    return ULOG_LEVEL_DEBUG;
+  case EZGRPC2_LOG_INFO:
+    return ULOG_LEVEL_INFO;
+  case EZGRPC2_LOG_WARNING:
+    return ULOG_LEVEL_WARN;
+  case EZGRPC2_LOG_ERROR:
+  case EZGRPC2_LOG_OFF:
+  case EZGRPC2_LOG_DEFAULT:
+  default:
+    return ULOG_LEVEL_ERROR;
+  }
+}
+
+static ezgrpc2_err logger_server_add(ezgrpc2_server *server) {
+  if (pthread_once(&logger_once, logger_initialize) != 0 || logger_status != ULOG_STATUS_OK)
+    return EZGRPC2_ERR_IO;
+
+  uint_fast64_t topic = atomic_fetch_add(&next_log_topic, 1);
+  snprintf(server->log_topic, sizeof(server->log_topic), "ezgrpc2-server-%" PRIuFAST64, topic);
+  server->log_topic_id =
+      ulog_topic_add(server->log_topic, log_output,
+                     ulog_level_for((ezgrpc2_log_level)atomic_load(&server->log_level)));
+  if (server->log_topic_id == ULOG_TOPIC_ID_INVALID)
+    return EZGRPC2_ERR_IO;
+
+  pthread_mutex_lock(&log_registry_mutex);
+  server->log_registry_next = log_registry;
+  log_registry = server;
+  server->log_topic_initialized = true;
+  pthread_mutex_unlock(&log_registry_mutex);
+  return EZGRPC2_OK;
+}
+
+static void logger_server_remove(ezgrpc2_server *server) {
+  if (!server->log_topic_initialized)
+    return;
+
+  (void)ulog_topic_remove(server->log_topic);
+  pthread_mutex_lock(&log_registry_mutex);
+  ezgrpc2_server **link = &log_registry;
+  while (*link != nullptr && *link != server)
+    link = &(*link)->log_registry_next;
+  if (*link == server)
+    *link = server->log_registry_next;
+  server->log_topic_initialized = false;
+  pthread_mutex_unlock(&log_registry_mutex);
+}
+
 void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt, ...) {
-  if (server->log_level == EZGRPC2_LOG_OFF || level > server->log_level)
+  if (server == nullptr)
+    return;
+  int log_level = atomic_load(&server->log_level);
+  if (log_level == EZGRPC2_LOG_OFF || level > log_level)
     return;
 
   /* one write per line, so that lines of several servers do not interleave */
@@ -31,7 +128,26 @@ void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt
   if (n >= 0 && (size_t)n < sizeof(line))
     vsnprintf(line + n, sizeof(line) - (size_t)n, fmt, ap);
   va_end(ap);
-  fputs(line, server->log_file);
+
+  switch (level) {
+  case EZGRPC2_LOG_ERROR:
+    ulog_t_error(server->log_topic, "%s", line);
+    break;
+  case EZGRPC2_LOG_WARNING:
+    ulog_t_warn(server->log_topic, "%s", line);
+    break;
+  case EZGRPC2_LOG_INFO:
+    ulog_t_info(server->log_topic, "%s", line);
+    break;
+  case EZGRPC2_LOG_DEBUG:
+    ulog_t_debug(server->log_topic, "%s", line);
+    break;
+  case EZGRPC2_LOG_TRACE:
+    ulog_t_trace(server->log_topic, "%s", line);
+    break;
+  default:
+    break;
+  }
 }
 
 /* ---- routes ------------------------------------------------------------------- */
@@ -227,9 +343,17 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const ezgrpc2_config *config) {
     cfg->max_message_size = DEFAULT_MAX_MESSAGE_SIZE;
   if (cfg->max_frame_size == 0)
     cfg->max_frame_size = DEFAULT_MAX_FRAME_SIZE;
-  server->log_level = cfg->log_level == EZGRPC2_LOG_DEFAULT ? EZGRPC2_LOG_INFO : cfg->log_level;
+  ezgrpc2_log_level initial_level =
+      cfg->log_level == EZGRPC2_LOG_DEFAULT ? EZGRPC2_LOG_INFO : cfg->log_level;
+  if (initial_level < EZGRPC2_LOG_OFF || initial_level > EZGRPC2_LOG_TRACE) {
+    fprintf(stderr, "ezgrpc2: invalid log level\n");
+    goto err;
+  }
+  atomic_init(&server->log_level, initial_level);
   server->log_file = cfg->log_file != nullptr ? cfg->log_file : stderr;
   cfg->log_file = server->log_file;
+  if (logger_server_add(server) != EZGRPC2_OK)
+    goto err;
 
   /* HTTP/2 limits: a frame is 16 KiB to 16 MiB, a window at most 2^31 - 1 */
   if (cfg->max_frame_size < (16u * 1024) || cfg->max_frame_size > (1u << 24) - 1 ||
@@ -260,12 +384,12 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const ezgrpc2_config *config) {
     goto err;
 
   if (server->ipv4_addr != nullptr &&
-      (server->ipv4_sockfd = open_listener(server, AF_INET, server->ipv4_addr, cfg->port,
-                                           cfg->backlog)) == -1)
+      (server->ipv4_sockfd =
+           open_listener(server, AF_INET, server->ipv4_addr, cfg->port, cfg->backlog)) == -1)
     goto err;
   if (server->ipv6_addr != nullptr &&
-      (server->ipv6_sockfd = open_listener(server, AF_INET6, server->ipv6_addr, cfg->port,
-                                           cfg->backlog)) == -1)
+      (server->ipv6_sockfd =
+           open_listener(server, AF_INET6, server->ipv6_addr, cfg->port, cfg->backlog)) == -1)
     goto err;
 
   if (uv_loop_init(&server->loop) != 0)
@@ -389,8 +513,24 @@ EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *server) {
   ezgrpc2_free(server->ipv6_addr);
   ezgrpc2_free(server->sessions);
   ezgrpc2_free(server->free_sessions);
+  logger_server_remove(server);
   pthread_mutex_destroy(&server->post_mutex);
   ezgrpc2_free(server);
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_set_log_level(ezgrpc2_server *server,
+                                                     ezgrpc2_log_level level) {
+  if (server == nullptr || level < EZGRPC2_LOG_DEFAULT || level > EZGRPC2_LOG_TRACE)
+    return EZGRPC2_ERR_INVALID;
+  if (level == EZGRPC2_LOG_DEFAULT)
+    level = EZGRPC2_LOG_INFO;
+
+  pthread_mutex_lock(&log_level_mutex);
+  ulog_status status = ulog_topic_level_set(server->log_topic, ulog_level_for(level));
+  if (status == ULOG_STATUS_OK)
+    atomic_store(&server->log_level, level);
+  pthread_mutex_unlock(&log_level_mutex);
+  return status == ULOG_STATUS_OK ? EZGRPC2_OK : EZGRPC2_ERR_IO;
 }
 
 /* ---- running ---------------------------------------------------------------------- */

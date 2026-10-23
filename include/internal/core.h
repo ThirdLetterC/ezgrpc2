@@ -22,7 +22,6 @@
 #include <sys/types.h>
 
 #include "ezgrpc2.h"
-#include "ansicolors.h"
 #include "common.h"
 #include "ezgrpc2_header.h"
 #include "ezgrpc2_list.h"
@@ -34,20 +33,19 @@
 void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
 
-#define LOG_ERROR(server, fmt, ...)                                                                \
-  server_log(server, EZGRPC2_LOG_ERROR, COLSTR("error: " fmt, BHRED) __VA_OPT__(, ) __VA_ARGS__)
-#define LOG_WARNING(server, fmt, ...)                                                              \
-  server_log(server, EZGRPC2_LOG_WARNING,                                                          \
-             COLSTR("warning: " fmt, BHYEL) __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_ERROR(server, fmt, ...) \
+  server_log(server, EZGRPC2_LOG_ERROR, "error: " fmt __VA_OPT__(, ) __VA_ARGS__)
+#define LOG_WARNING(server, fmt, ...) \
+  server_log(server, EZGRPC2_LOG_WARNING, "warning: " fmt __VA_OPT__(, ) __VA_ARGS__)
 #define LOG_INFO(server, ...)  server_log(server, EZGRPC2_LOG_INFO, __VA_ARGS__)
 #define LOG_DEBUG(server, ...) server_log(server, EZGRPC2_LOG_DEBUG, __VA_ARGS__)
 /* per frame: only compiled in with T=1 */
 #ifdef EZGRPC2_TRACE
-#define LOG_TRACE(server, fmt, ...)                                                                \
+#define LOG_TRACE(server, fmt, ...) \
   server_log(server, EZGRPC2_LOG_TRACE, "@%s: " fmt, __func__ __VA_OPT__(, ) __VA_ARGS__)
 #else
-#define LOG_TRACE(server, ...)                                                                     \
-  do {                                                                                             \
+#define LOG_TRACE(server, ...) \
+  do {                         \
   } while (0)
 #endif
 
@@ -269,8 +267,12 @@ struct ezgrpc2_server {
   char *ipv4_addr;
   char *ipv6_addr;
 
-  ezgrpc2_log_level log_level;
+  atomic_int log_level;
   FILE *log_file;
+  char log_topic[40];
+  int log_topic_id;
+  bool log_topic_initialized;
+  struct ezgrpc2_server *log_registry_next;
 
   ezgrpc2_route **routes;
   size_t nb_routes;

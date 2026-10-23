@@ -93,6 +93,13 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const ezgrpc2_config *config);
 EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *server);
 
 /**
+ * Changes the server's log threshold. Safe to call from any thread while the
+ * server is alive. EZGRPC2_LOG_DEFAULT selects EZGRPC2_LOG_INFO.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_set_log_level(ezgrpc2_server *server,
+                                                     ezgrpc2_log_level level);
+
+/**
  * Registers a handler for a single-request method, e.g.
  * ``"/helloworld.Greeter/SayHello"``.
  */

@@ -1,6 +1,10 @@
 -include ../config.mk
 
 CFLAGS += -I../include -I../include/internal
+CFLAGS += -I../vendor/ulog/include
+CFLAGS += -DULOG_BUILD_EXTRA_OUTPUTS=1 -DULOG_BUILD_TOPICS_MODE=2
+CFLAGS += -DULOG_BUILD_COLOR=0 -DULOG_BUILD_SOURCE_LOCATION=0 -DULOG_BUILD_TIME=0
+CFLAGS += -DULOG_BUILD_WARN_NOT_ENABLED=0
 CFLAGS += -fPIC
 CFLAGS += -fvisibility=hidden
 CFLAGS += $(EXTRACFLAGS)
@@ -40,6 +44,7 @@ ifeq ($(FLATCC),1)
 endif
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
+objects += ulog.o
 
 all: $(targets)
 
@@ -51,6 +56,9 @@ libezgrpc2.so : $(objects)
 
 # -MMD: rebuild objects when a header (e.g. the structs in core.h) changes
 %.o : %.c
+	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
+
+ulog.o: ../vendor/ulog/src/ulog.c
 	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
 
 -include $(objects:.o=.d)

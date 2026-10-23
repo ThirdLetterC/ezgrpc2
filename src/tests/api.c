@@ -14,6 +14,8 @@
 #error "ezgrpc2.h leaks internal macros"
 #endif
 
+#include "core.h"
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -132,6 +134,64 @@ void test_post_and_stop_from_another_thread(void) {
   TEST_ASSERT_EQUAL_INT(100, counter);
 }
 
+static size_t read_log(FILE *file, char *buffer, size_t size) {
+  fflush(file);
+  rewind(file);
+  size_t n = fread(buffer, 1, size - 1, file);
+  buffer[n] = '\0';
+  return n;
+}
+
+void test_log_level_control(void) {
+  FILE *first_log = tmpfile();
+  FILE *second_log = tmpfile();
+  TEST_ASSERT_NOT_NULL(first_log);
+  TEST_ASSERT_NOT_NULL(second_log);
+
+  ezgrpc2_server *first = ezgrpc2_server_new(&(ezgrpc2_config){.port = PORT,
+                                                               .ipv4_addr = "127.0.0.1",
+                                                               .log_level = EZGRPC2_LOG_WARNING,
+                                                               .log_file = first_log});
+  TEST_ASSERT_NOT_NULL(first);
+  ezgrpc2_server *second = ezgrpc2_server_new(&(ezgrpc2_config){.port = PORT,
+                                                                .ipv4_addr = "127.0.0.1",
+                                                                .log_level = EZGRPC2_LOG_ERROR,
+                                                                .log_file = second_log});
+  TEST_ASSERT_NOT_NULL(second);
+
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID,
+                        ezgrpc2_server_set_log_level(nullptr, EZGRPC2_LOG_INFO));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID,
+                        ezgrpc2_server_set_log_level(first, (ezgrpc2_log_level)-1));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID,
+                        ezgrpc2_server_set_log_level(first, (ezgrpc2_log_level)7));
+
+  server_log(first, EZGRPC2_LOG_INFO, "filtered-first\n");
+  server_log(first, EZGRPC2_LOG_WARNING, "warning-first\n");
+  server_log(second, EZGRPC2_LOG_WARNING, "filtered-second\n");
+  server_log(second, EZGRPC2_LOG_ERROR, "error-second\n");
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_server_set_log_level(first, EZGRPC2_LOG_DEBUG));
+  server_log(first, EZGRPC2_LOG_DEBUG, "debug-first\n");
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_server_set_log_level(second, EZGRPC2_LOG_OFF));
+  server_log(second, EZGRPC2_LOG_ERROR, "filtered-off\n");
+
+  char first_contents[4096], second_contents[4096];
+  read_log(first_log, first_contents, sizeof(first_contents));
+  read_log(second_log, second_contents, sizeof(second_contents));
+  TEST_ASSERT_NOT_NULL(strstr(first_contents, "warning-first"));
+  TEST_ASSERT_NOT_NULL(strstr(first_contents, "debug-first"));
+  TEST_ASSERT_NULL(strstr(first_contents, "filtered-first"));
+  TEST_ASSERT_NULL(strstr(first_contents, "error-second"));
+  TEST_ASSERT_NOT_NULL(strstr(second_contents, "error-second"));
+  TEST_ASSERT_NULL(strstr(second_contents, "filtered-second"));
+  TEST_ASSERT_NULL(strstr(second_contents, "filtered-off"));
+
+  ezgrpc2_server_free(first);
+  ezgrpc2_server_free(second);
+  fclose(first_log);
+  fclose(second_log);
+}
+
 void test_strings(void) {
   TEST_ASSERT_EQUAL_STRING("success", ezgrpc2_strerror(EZGRPC2_OK));
   TEST_ASSERT_EQUAL_STRING("already exists", ezgrpc2_strerror(EZGRPC2_ERR_EXISTS));
@@ -180,6 +240,7 @@ int main(void) {
   RUN_TEST(test_routes);
   RUN_TEST(test_poll_idle);
   RUN_TEST(test_post_and_stop_from_another_thread);
+  RUN_TEST(test_log_level_control);
   RUN_TEST(test_strings);
   RUN_TEST(test_messages);
   RUN_TEST(test_call_null_safety);

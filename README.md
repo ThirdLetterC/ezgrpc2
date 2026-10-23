@@ -57,6 +57,26 @@ A libuv loop runs on one thread. To use more cores, create one server per thread
 
 A single HTTP/2 connection always stays on one loop, so multiple loops only help when clients open multiple connections.
 
+### Logging
+
+Set the initial threshold and optional output stream in `ezgrpc2_config`, then
+change the threshold at runtime with `ezgrpc2_server_set_log_level()`:
+
+```c
+ezgrpc2_config cfg = {
+    .port = 50051,
+    .log_level = EZGRPC2_LOG_WARNING,
+    .log_file = stderr,
+};
+ezgrpc2_server *server = ezgrpc2_server_new(&cfg);
+/* Later, from any thread while the server is alive: */
+ezgrpc2_server_set_log_level(server, EZGRPC2_LOG_DEBUG);
+```
+
+Each server has its own threshold and output stream. `EZGRPC2_LOG_DEFAULT`
+selects info; `EZGRPC2_LOG_OFF` disables server logs. Logging uses the vendored
+[ulog](https://github.com/thirdLetterC/ulog) backend.
+
 ### Performance
 
 Measured on localhost with `h2load` sending unary `SayHello` calls to the example server built with `MIMALLOC=1`:

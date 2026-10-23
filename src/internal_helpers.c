@@ -91,13 +91,16 @@ char *ezgetdt(char *buf, size_t len) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   char tmp[32] = {};
-  strftime(tmp, sizeof(tmp), "%F %T", localtime(&ts.tv_sec));
-  snprintf(buf, len, COLSTR("%s.%09ld", BGRN), tmp, ts.tv_nsec);
+  struct tm stm;
+  localtime_r(&ts.tv_sec, &stm);
+  strftime(tmp, sizeof(tmp), "%F %T", &stm);
+  snprintf(buf, len, "%s.%09ld", tmp, ts.tv_nsec);
 #else
   time_t t = time(nullptr);
-  struct tm stm = *localtime(&t);
-  snprintf(buf, len, COLSTR("%d/%02d/%02d %02d:%02d:%02d", BGRN), stm.tm_year + 1900,
-           stm.tm_mon + 1, stm.tm_mday, stm.tm_hour, stm.tm_min, stm.tm_sec);
+  struct tm stm;
+  localtime_r(&t, &stm);
+  snprintf(buf, len, "%d/%02d/%02d %02d:%02d:%02d", stm.tm_year + 1900, stm.tm_mon + 1, stm.tm_mday,
+           stm.tm_hour, stm.tm_min, stm.tm_sec);
 #endif
   return buf;
 }
