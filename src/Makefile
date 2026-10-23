@@ -1,6 +1,6 @@
 -include ../config.mk
 
-CFLAGS += -I.
+CFLAGS += -I../include
 CFLAGS += -fPIC
 CFLAGS += -fvisibility=hidden
 CFLAGS += $(EXTRACFLAGS)

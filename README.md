@@ -101,11 +101,29 @@ The Python integration tests also need `grpcio`, `grpcio-tools` and `protobuf` (
 
 ## Building
 
+The sources are laid out as:
+
+| Directory | Contents |
+|:---|:---|
+| `include/` | All headers. Applications include `ezgrpc2.h` |
+| `src/` | Library sources (`.c`) and build output |
+| `src/tests/` | Unit tests |
+| `examples/` | Example servers and the Python integration tests |
+
 Build the static library (`src/libezgrpc2.a`), the shared library (`src/libezgrpc2.so`) and the examples:
 
 ```bash
 make
 ```
+
+To build your own server against it, add `include/` to the include path and link the library with its dependencies:
+
+```bash
+cc -std=c23 -D_GNU_SOURCE -Iinclude my_server.c -o my_server \
+  -Lsrc -l:libezgrpc2.a -luv -lnghttp2 -luuid -lpthread -lssl -lcrypto -lz
+```
+
+Add `-lprotobuf-c` when the Protobuf-C helpers are built, and the allocator library (`-lmimalloc` or `-ljemalloc`) when one is selected.
 
 ### Build options
 

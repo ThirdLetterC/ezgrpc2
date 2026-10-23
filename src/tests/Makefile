@@ -1,6 +1,6 @@
 -include ../../config.mk
 
-CFLAGS += -I./unity -I..
+CFLAGS += -I./unity -I../../include
 
 EZGRPC2_LIBS = -L.. -l:libezgrpc2.a -lnghttp2 -lz -lssl -lcrypto -lpthread -luuid -luv
 
