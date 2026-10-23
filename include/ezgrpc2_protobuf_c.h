@@ -7,10 +7,6 @@
 #include "ezgrpc2_messages.h"
 #include "ezgrpc2_grpc_status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * Returns a pointer to a ProtobufCAllocator whose alloc and free function pointers
  * route directly to ezgrpc2_malloc and ezgrpc2_free.
@@ -69,9 +65,5 @@ EZGRPC2_API void ezgrpc2_pb_free_unpacked(ProtobufCMessage *message);
  *         or nullptr on failure.
  */
 EZGRPC2_API ezgrpc2_messages *ezgrpc2_pb_create_response(const ProtobufCMessage *message);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_PROTOBUF_C_H */

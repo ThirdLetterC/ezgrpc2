@@ -21,10 +21,6 @@
 #include "ezgrpc2_header.h"
 #include "ezgrpc2_grpc_status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // int ezgrpc2_session_submit_response(ezgrpc2_session *ezsession, i32 stream_id, ezgrpc2_list *lmessages, int end_stream, int grpc_status);
 
 /**
@@ -119,9 +115,5 @@ int ezgrpc2_server_session_stream_find_header(ezgrpc2_server *ezserver,
                                               ezgrpc2_header *ezheader);
 
 const char *ezgrpc2_license(void);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_H */

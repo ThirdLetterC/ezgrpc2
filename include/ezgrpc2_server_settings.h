@@ -8,10 +8,6 @@
 #include <sys/types.h>
 #include "defs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_server_settings ezgrpc2_server_settings;
 
 EZGRPC2_API ezgrpc2_server_settings *ezgrpc2_server_settings_new(void *unused);
@@ -52,9 +48,5 @@ EZGRPC2_API size_t
 ezgrpc2_server_settings_get_arena_events_size(const ezgrpc2_server_settings *server_settings);
 EZGRPC2_API size_t
 ezgrpc2_server_settings_get_arena_messages_size(const ezgrpc2_server_settings *server_settings);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_SERVER_SETTINGS_H */

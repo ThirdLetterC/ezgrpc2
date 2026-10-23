@@ -8,10 +8,6 @@
 #include "ezgrpc2_server.h"
 #include "ezgrpc2_event.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define EZGRPC2_REFLECTION_V1ALPHA_PATH \
   "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo"
 #define EZGRPC2_REFLECTION_V1_PATH "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo"
@@ -37,9 +33,5 @@ EZGRPC2_API int ezgrpc2_reflection_add_file_descriptor(const char *symbol_or_fil
  * Returns true if the event was handled by the reflection service, false otherwise.
  */
 EZGRPC2_API bool ezgrpc2_reflection_handle_event(ezgrpc2_server *server, ezgrpc2_event *event);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_REFLECTION_H */

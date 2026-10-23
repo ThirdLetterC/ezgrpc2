@@ -5,10 +5,6 @@
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_message.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_list_message_t ezgrpc2_list_message_t;
 
 static inline ezgrpc2_list_message_t *ezgrpc2_list_message_new([[maybe_unused]] void *unused) {
@@ -64,9 +60,5 @@ static inline void ezgrpc2_list_message_concat_and_empty_src(ezgrpc2_list_messag
                                                              ezgrpc2_list_message_t *src) {
   ezgrpc2_list_concat_and_empty_src((ezgrpc2_list *)dst, (ezgrpc2_list *)src);
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_LIST_MESSAGE_H */

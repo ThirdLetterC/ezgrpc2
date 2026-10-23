@@ -5,10 +5,6 @@
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_event.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_list_event_t ezgrpc2_list_event_t;
 
 static inline ezgrpc2_list_event_t *ezgrpc2_list_event_new([[maybe_unused]] void *unused) {
@@ -65,9 +61,5 @@ static inline void ezgrpc2_list_event_concat_and_empty_src(ezgrpc2_list_event_t 
                                                            ezgrpc2_list_event_t *src) {
   ezgrpc2_list_concat_and_empty_src((ezgrpc2_list *)dst, (ezgrpc2_list *)src);
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_LIST_EVENT_H */

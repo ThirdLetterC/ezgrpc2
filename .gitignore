@@ -4,7 +4,6 @@ a.out
 *.so
 *.a
 *.bin
-*cpp
 core
 test*.c
 *.swp

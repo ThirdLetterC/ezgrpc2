@@ -9,10 +9,6 @@
 #include "ezgrpc2_messages.h"
 #include "ezgrpc2_grpc_status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_interceptor_info {
   ezgrpc2_session_uuid session_uuid;
   int32_t stream_id;
@@ -79,9 +75,5 @@ typedef bool (*ezgrpc2_token_validator_fn)(const char *token, void *user_data);
 
 EZGRPC2_API ezgrpc2_interceptor
 ezgrpc2_interceptor_create_bearer_auth(ezgrpc2_token_validator_fn validator, void *user_data);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_INTERCEPTOR_H */

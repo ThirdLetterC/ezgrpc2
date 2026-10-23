@@ -8,10 +8,6 @@
 #include "ezgrpc2_metadata.h"
 #include "ezgrpc2_server.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define EZGRPC2_STATUS_DETAILS_TRAILER "grpc-status-details-bin"
 
 typedef struct ezgrpc2_status_detail_entry {
@@ -51,9 +47,5 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end_with_status_details(
     ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid, int32_t stream_id,
     ezgrpc2_grpc_status status, const char *message, const ezgrpc2_status_detail_entry *details,
     size_t nb_details, const ezgrpc2_metadata_entry *extra_trailers, size_t nb_extra_trailers);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_STATUS_DETAILS_H */

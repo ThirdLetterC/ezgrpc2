@@ -57,7 +57,6 @@ ifneq ($(TLS),none)
 endif
 objects += internal_helpers.o
 objects += internal_nghttp2_callbacks.o
-#targets += examples/hello_worldcpp.bin
 
 all: $(targets)
 

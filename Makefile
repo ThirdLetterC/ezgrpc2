@@ -11,7 +11,9 @@ all :
 test: all
 	$(MAKE) -C src/tests test
 	$(MAKE) -C examples/python_client_c_server test
+ifneq ($(TLS),none)
 	$(MAKE) -C examples/python_client_c_server test-tls
+endif
 ifeq ($(FLATCC),1)
 	$(MAKE) -C examples/flatbuffers test
 endif

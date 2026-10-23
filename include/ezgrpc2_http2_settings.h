@@ -4,10 +4,6 @@
 #include <stddef.h>
 #include "defs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_http2_settings ezgrpc2_http2_settings;
 
 EZGRPC2_API ezgrpc2_http2_settings *ezgrpc2_http2_settings_new(void *unused);
@@ -40,9 +36,5 @@ EZGRPC2_API size_t
 ezgrpc2_http2_settings_get_max_sessions(const ezgrpc2_http2_settings *http2_settings);
 EZGRPC2_API size_t
 ezgrpc2_http2_settings_get_max_paths(const ezgrpc2_http2_settings *http2_settings);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_HTTP2_SETTINGS_H */

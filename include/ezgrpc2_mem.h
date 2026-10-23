@@ -5,10 +5,6 @@
 #include <string.h>
 #include "defs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_allocator {
   void *(*malloc)(size_t size);
   void *(*calloc)(size_t nmemb, size_t size);
@@ -170,10 +166,6 @@ static inline char *ezgrpc2_strndup(const char *s, size_t n) {
 #define aligned_alloc(al, sz) ezgrpc2_aligned_alloc(al, sz)
 #define strdup(s)             ezgrpc2_strdup(s)
 #define strndup(s, n)         ezgrpc2_strndup(s, n)
-#endif
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif /* EZGRPC2_MEM_H */

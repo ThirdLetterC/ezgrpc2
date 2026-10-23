@@ -1,6 +1,5 @@
 CC ?= gcc
 AR ?= ar
-CXX ?= g++
 
 CONFIG_PATH_MAX_LEN = 64
 CONFIG_STREAM_MAX_HEADERS = 32

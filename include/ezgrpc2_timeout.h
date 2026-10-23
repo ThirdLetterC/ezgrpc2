@@ -5,10 +5,6 @@
 #include <stddef.h>
 #include "defs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * Returns current monotonic time in milliseconds.
  */
@@ -36,9 +32,5 @@ struct ezgrpc2_server;
  * with EZGRPC2_GRPC_STATUS_DEADLINE_EXCEEDED.
  */
 EZGRPC2_API void ezgrpc2_server_check_deadlines(struct ezgrpc2_server *server);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_TIMEOUT_H */

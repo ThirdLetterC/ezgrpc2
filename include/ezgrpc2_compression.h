@@ -6,10 +6,6 @@
 #include "defs.h"
 #include "ezgrpc2_message.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef enum {
   EZGRPC2_COMPRESS_IDENTITY = 0,
   EZGRPC2_COMPRESS_GZIP = 1,
@@ -46,9 +42,5 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_message_compress_gzip(const ezgrpc2_message
  * Returns nullptr on decompression failure.
  */
 EZGRPC2_API ezgrpc2_message *ezgrpc2_message_decompress_gzip(const ezgrpc2_message *msg);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_COMPRESSION_H */

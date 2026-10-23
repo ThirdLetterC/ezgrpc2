@@ -7,10 +7,6 @@
 #include <unistd.h>
 #include "defs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct ezgrpc2_server;
 struct ezgrpc2_session;
 struct ezgrpc2_buf;
@@ -77,9 +73,5 @@ ezgrpc2_server_new_tls(const char *ipv4_addr, uint16_t ipv4_port, const char *ip
                        uint16_t ipv6_port, int backlog, const char *cert_file, const char *key_file,
                        struct ezgrpc2_server_settings *server_settings,
                        struct ezgrpc2_http2_settings *http2_settings);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_TLS_H */

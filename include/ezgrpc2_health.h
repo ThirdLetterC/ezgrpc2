@@ -7,10 +7,6 @@
 #include "ezgrpc2_server.h"
 #include "ezgrpc2_event.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define EZGRPC2_HEALTH_PATH_CHECK "/grpc.health.v1.Health/Check"
 #define EZGRPC2_HEALTH_PATH_WATCH "/grpc.health.v1.Health/Watch"
 
@@ -45,9 +41,5 @@ EZGRPC2_API ezgrpc2_health_status ezgrpc2_health_get_status(const char *service)
  * Returns true if the event was handled by the health service, false otherwise.
  */
 EZGRPC2_API bool ezgrpc2_health_handle_event(ezgrpc2_server *server, ezgrpc2_event *event);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_HEALTH_H */

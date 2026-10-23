@@ -9,10 +9,6 @@
 #include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_grpc_status.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct ezgrpc2_metadata_entry {
   const char *key;
   size_t key_len;
@@ -74,9 +70,5 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end2(ezgrpc2_server *server,
                                                    const char *custom_status_message,
                                                    const ezgrpc2_metadata_entry *trailers,
                                                    size_t nb_trailers);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_METADATA_H */

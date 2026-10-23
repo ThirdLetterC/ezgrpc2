@@ -15,10 +15,6 @@
 #include "ezgrpc2_message.h"
 #include "ezgrpc2_messages.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * FlatBuffers support through flatcc (https://github.com/dvidelabs/flatcc).
  *
@@ -93,9 +89,5 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder, uint8_t 
  * @return A new list holding one message, or nullptr on failure.
  */
 EZGRPC2_API ezgrpc2_messages *ezgrpc2_fb_create_response(flatcc_builder_t *builder);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* EZGRPC2_FLATCC_H */

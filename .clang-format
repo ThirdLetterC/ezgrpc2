@@ -1,6 +1,6 @@
 # Formatting for the ezgrpc2 C sources. Run `make format` (or `make format-check`).
 BasedOnStyle: LLVM
-Language: Cpp
+Language: C
 Standard: Latest
 
 IndentWidth: 2
