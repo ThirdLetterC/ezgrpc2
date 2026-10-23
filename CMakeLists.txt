@@ -8,6 +8,7 @@ endif()
 include(CheckCCompilerFlag)
 include(CheckCSourceCompiles)
 include(CTest)
+include(FetchContent)
 include(GNUInstallDirs)
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
@@ -67,6 +68,37 @@ check_c_source_compiles("typedef struct { int x; } sample; int main(void) { retu
 check_c_source_compiles("static constexpr int value = 1; int main(void) { return value - 1; }"
                         GRPC_HAS_C23_CONSTEXPR)
 unset(CMAKE_REQUIRED_FLAGS)
+
+# ulog is a source-only C23 dependency, so populate it through FetchContent and
+# provide the small library target it does not define itself. Pin the revision
+# to keep configure-time downloads reproducible.
+if(POLICY CMP0169)
+  cmake_policy(SET CMP0169 OLD)
+endif()
+FetchContent_Declare(ulog
+  GIT_REPOSITORY https://github.com/ThirdLetterC/ulog.git
+  GIT_TAG 99cf8b6e515eee0353eddd024b354551fd99f2dc
+  GIT_PROGRESS TRUE)
+FetchContent_GetProperties(ulog)
+if(NOT ulog_POPULATED)
+  FetchContent_Populate(ulog)
+endif()
+add_library(ulog STATIC "${ulog_SOURCE_DIR}/src/ulog.c")
+add_library(ulog::ulog ALIAS ulog)
+target_include_directories(ulog PRIVATE "${ulog_SOURCE_DIR}/include")
+target_compile_options(ulog PRIVATE -Wall -pedantic -fvisibility=hidden "${GRPC_C_STANDARD_FLAG}")
+target_compile_definitions(ulog PRIVATE
+  _GNU_SOURCE _FORTIFY_SOURCE=2
+  ULOG_BUILD_EXTRA_OUTPUTS=1 ULOG_BUILD_TOPICS_MODE=2 ULOG_BUILD_COLOR=0
+  ULOG_BUILD_SOURCE_LOCATION=0 ULOG_BUILD_TIME=0 ULOG_BUILD_WARN_NOT_ENABLED=0)
+if(NOT GRPC_HAS_C23_CONSTEXPR)
+  target_compile_definitions(ulog PRIVATE constexpr=const)
+endif()
+# ulog also supports pre-C23 GCC/Clang through __auto_type. Use that spelling
+# for compilers that only accept the draft -std=c2x mode.
+if(NOT GRPC_HAS_C23)
+  target_compile_definitions(ulog PRIVATE auto=__auto_type)
+endif()
 
 function(grpc_feature_enabled feature found description)
   string(TOUPPER "${GRPC_${feature}}" setting)
@@ -251,7 +283,6 @@ set(GRPC_SOURCES
   src/grpc_tls.c
   src/internal_helpers.c
   src/internal_nghttp2_callbacks.c
-  vendor/ulog/src/ulog.c
 )
 if(GRPC_TLS_SOURCE)
   list(APPEND GRPC_SOURCES "${GRPC_TLS_SOURCE}")
@@ -265,7 +296,7 @@ endif()
 
 add_library(grpc_objects OBJECT ${GRPC_SOURCES})
 set_target_properties(grpc_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(grpc_objects PUBLIC include vendor/ulog/include)
+target_include_directories(grpc_objects PUBLIC include PRIVATE "${ulog_SOURCE_DIR}/include")
 target_include_directories(grpc_objects PRIVATE include/internal)
 if(NGHTTP2_HEADER_DIR)
   target_include_directories(grpc_objects PRIVATE "${NGHTTP2_HEADER_DIR}")
@@ -275,7 +306,8 @@ if(NOT GRPC_HAS_C23_CONSTEXPR)
   # Clang 18 accepts -std=c23 but does not yet implement C23 constexpr.
   target_compile_definitions(grpc_objects PRIVATE constexpr=const)
 endif()
-target_compile_definitions(grpc_objects PUBLIC _GNU_SOURCE _FORTIFY_SOURCE=2
+target_compile_definitions(grpc_objects PUBLIC _GNU_SOURCE _FORTIFY_SOURCE=2)
+target_compile_definitions(grpc_objects PRIVATE
   ULOG_BUILD_EXTRA_OUTPUTS=1 ULOG_BUILD_TOPICS_MODE=2 ULOG_BUILD_COLOR=0
   ULOG_BUILD_SOURCE_LOCATION=0 ULOG_BUILD_TIME=0 ULOG_BUILD_WARN_NOT_ENABLED=0)
 if(NOT GRPC_HAS_NULLPTR)
@@ -316,7 +348,7 @@ set_target_properties(grpc_static PROPERTIES OUTPUT_NAME grpc)
 set_target_properties(grpc_shared PROPERTIES OUTPUT_NAME grpc)
 add_library(grpc::grpc ALIAS grpc_static)
 
-set(GRPC_LINK_LIBRARIES "${GRPC_NGHTTP2_TARGET}" PkgConfig::LIBUV "${UUID_LIBRARY}" Threads::Threads
+set(GRPC_LINK_LIBRARIES ulog::ulog "${GRPC_NGHTTP2_TARGET}" PkgConfig::LIBUV "${UUID_LIBRARY}" Threads::Threads
   ${GRPC_TLS_LIBRARIES} ${GRPC_ALLOCATOR_LIBRARIES})
 if(GRPC_ZLIB_ENABLED)
   list(APPEND GRPC_LINK_LIBRARIES "${GRPC_ZLIB_TARGET}")

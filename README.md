@@ -74,7 +74,7 @@ grpc_server_set_log_level(server, GRPC_LOG_DEBUG);
 ```
 
 Each server has its own threshold and output stream. `GRPC_LOG_DEFAULT`
-selects info; `GRPC_LOG_OFF` disables server logs. Logging uses the vendored
+selects info; `GRPC_LOG_OFF` disables server logs. Logging uses the
 [ulog](https://github.com/thirdLetterC/ulog) backend.
 
 ### Performance
@@ -96,6 +96,7 @@ Measured on localhost with `ghz` sending unary `SayHello` calls to the Release e
 - **Platform**: Linux.
 - **Compiler**: GCC 11+ or Clang 14+ with C23 support (`-std=c23`, or `-std=c2x` on older compilers).
 - **Build system**: CMake 3.20 or newer.
+- **Logger dependency**: CMake fetches the pinned [ulog](https://github.com/ThirdLetterC/ulog) source at configure time. For offline or local development, set `FETCHCONTENT_SOURCE_DIR_ULOG` to an existing checkout.
 - **Required libraries**:
   - `libuv` (event loop)
   - `libnghttp2` (HTTP/2)
