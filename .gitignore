@@ -10,7 +10,6 @@ test*.c
 push
 temp
 
-docs/build
 src/tests/list
 src/tests/pthpool
 src/tests/mem
