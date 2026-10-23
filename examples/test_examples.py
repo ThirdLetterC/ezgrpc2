@@ -38,8 +38,10 @@ def test_multi(channel):
 
 
 def main():
-    which, port = sys.argv[1], sys.argv[2]
-    with grpc.insecure_channel(f"localhost:{port}") as channel:
+    which, target = sys.argv[1], sys.argv[2]
+    if ":" not in target:
+        target = f"localhost:{target}"
+    with grpc.insecure_channel(target) as channel:
         grpc.channel_ready_future(channel).result(timeout=5)
         {"single": test_single, "multi": test_multi}[which](channel)
     return 0
