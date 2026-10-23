@@ -80,11 +80,19 @@ EZGRPC2_API void ezgrpc2_server_check_deadlines(ezgrpc2_server *server) {
   if (server == nullptr || server->sessions == nullptr) {
     return;
   }
+  /* nothing can have expired yet. this keeps the scan off the hot path */
+  if (server->next_deadline_ms == UINT64_MAX) {
+    return;
+  }
   uint64_t now_ms = ezgrpc2_time_now_ms();
+  if (now_ms < server->next_deadline_ms) {
+    return;
+  }
 
+  uint64_t next_deadline_ms = UINT64_MAX;
   for (size_t i = 0; i < server->nb_sessions; i++) {
     ezgrpc2_session *session = &server->sessions[i];
-    if (!session->is_active || session->is_closing || session->ngsession == nullptr || session->lstreams == nullptr) {
+    if (!session->is_active || session->is_closing || session->ngsession == nullptr) {
       continue;
     }
 
@@ -92,16 +100,18 @@ EZGRPC2_API void ezgrpc2_server_check_deadlines(ezgrpc2_server *server) {
     void *userdatas[64];
     size_t count = 0;
 
-    eznode_t *node = session->lstreams->front;
-    while (node != nullptr && count < 64) {
-      ezgrpc2_stream *stream = (ezgrpc2_stream *)node->data;
-      if (stream != nullptr && stream->is_deadline_set && now_ms >= stream->deadline_ms) {
+    for (ezgrpc2_stream *stream = session->streams; stream != nullptr; stream = stream->next) {
+      if (!stream->is_deadline_set)
+        continue;
+      if (now_ms >= stream->deadline_ms && count < 64) {
         stream->is_deadline_set = 0;
         expired_sids[count] = stream->stream_id;
         userdatas[count] = stream->path ? stream->path->userdata : nullptr;
         count++;
+      } else if (stream->deadline_ms < next_deadline_ms) {
+        /* still pending, or left over for the next scan */
+        next_deadline_ms = stream->deadline_ms;
       }
-      node = node->next;
     }
 
     for (size_t s = 0; s < count; s++) {
@@ -121,5 +131,5 @@ EZGRPC2_API void ezgrpc2_server_check_deadlines(ezgrpc2_server *server) {
                                          "Deadline Exceeded", nullptr, 0);
     }
   }
+  server->next_deadline_ms = next_deadline_ms;
 }
-

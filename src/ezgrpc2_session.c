@@ -52,13 +52,15 @@
 
 #define atlog(fmt, ...) ezlog("@ %s: " fmt, __func__, ##__VA_ARGS__)
 
+/* Output is not written here. The session is queued and all of its frames
+ * (from every stream) are written with a single write at the start of the
+ * next ezgrpc2_server_poll(), or with ezgrpc2_server_flush(). */
 EZGRPC2_API int ezgrpc2_server_session_stream_send(
   ezgrpc2_server *ezserver,
   ezgrpc2_session_uuid session_uuid,
   i32 stream_id,
   ezgrpc2_messages *messages) {
   ezgrpc2_list *lmessages = (ezgrpc2_list*)messages;
-  int res;
   ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
@@ -69,22 +71,44 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
     return 2;
   }
 
-  ezgrpc2_list_concat_and_empty_src(ezstream->lqueue_omessages, lmessages);
+  ezgrpc2_list_concat_and_empty_src(&ezstream->lqueue_omessages, lmessages);
 
-  nghttp2_data_provider data_provider;
-  data_provider.source.ptr = ezstream;
-  data_provider.read_callback = data_source_read_callback2;
-  nghttp2_submit_data(ezsession->ngsession, 0, stream_id, &data_provider);
-
-  while (nghttp2_session_want_write(ezsession->ngsession)) {
-    res = nghttp2_session_send(ezsession->ngsession);
+  /* an active data provider picks up the new messages by itself */
+  if (!ezstream->is_data_active) {
+    nghttp2_data_provider data_provider;
+    data_provider.source.ptr = ezstream;
+    data_provider.read_callback = data_source_read_callback2;
+    int res = nghttp2_submit_data(ezsession->ngsession, 0, stream_id, &data_provider);
     if (res) {
       EZGRPC2_LOG_ERROR(ezserver, "@ %s: %p.%p: nghttp2: %s\n", __func__, (void*)ezserver, (void*) ezsession,
             nghttp2_strerror(res));
       return 3;
     }
+    ezstream->is_data_active = true;
   }
+  session_schedule_flush(ezsession);
   return 0;
+}
+
+/* copies nva into a single allocation */
+static nghttp2_nv *nva_dup(const nghttp2_nv *nva, size_t nvlen) {
+  size_t size = nvlen * sizeof(*nva);
+  for (size_t i = 0; i < nvlen; i++)
+    size += nva[i].namelen + nva[i].valuelen;
+  nghttp2_nv *copy = malloc(size);
+  if (copy == nullptr)
+    return nullptr;
+  u8 *p = (u8 *)(copy + nvlen);
+  for (size_t i = 0; i < nvlen; i++) {
+    copy[i] = nva[i];
+    copy[i].name = p;
+    memcpy(p, nva[i].name, nva[i].namelen);
+    p += nva[i].namelen;
+    copy[i].value = p;
+    memcpy(p, nva[i].value, nva[i].valuelen);
+    p += nva[i].valuelen;
+  }
+  return copy;
 }
 
 #include "ezgrpc2_metadata.h"
@@ -130,14 +154,24 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end2(
     };
   }
 
-  if (!ezgrpc2_list_is_empty(ezstream->lqueue_omessages)) {
+  int res = 0;
+  if (ezstream->is_data_active) {
+    /* trailers must not overtake the queued DATA. the data provider
+     * submits them once it has written the last message. */
     EZGRPC2_LOG_TRACE(ezserver, "ending stream but messages are still queued\n");
+    if (ezstream->pending_trailers == nullptr) {
+      ezstream->pending_trailers = nva_dup(nva, total_trailers);
+      ezstream->nb_pending_trailers = total_trailers;
+      if (ezstream->pending_trailers == nullptr)
+        res = 1;
+    }
+  } else {
+    nghttp2_submit_trailer(ezsession->ngsession, stream_id, nva, total_trailers);
+    EZGRPC2_LOG_TRACE(ezserver, "trailer submitted\n");
   }
-  nghttp2_submit_trailer(ezsession->ngsession, stream_id, nva, total_trailers);
   free(nva);
-  EZGRPC2_LOG_TRACE(ezserver, "trailer submitted\n");
-  nghttp2_session_send(ezsession->ngsession);
-  return 0;
+  session_schedule_flush(ezsession);
+  return res;
 }
 
 EZGRPC2_API int ezgrpc2_server_session_stream_end(
@@ -187,7 +221,7 @@ EZGRPC2_API int ezgrpc2_server_session_end(
     return 1;
   }
   nghttp2_submit_goaway(ezsession->ngsession, 0, last_stream_id, (uint32_t)error_code, nullptr, 0);
-  nghttp2_session_send(ezsession->ngsession);
+  session_schedule_flush(ezsession);
 
   return 0;
 }

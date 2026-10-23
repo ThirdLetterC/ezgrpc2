@@ -175,6 +175,6 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send_initial_metadata(
   ezgrpc2_free(nva);
   if (res != 0) return 1;
 
-  nghttp2_session_send(session->ngsession);
+  session_schedule_flush(session);
   return 0;
 }

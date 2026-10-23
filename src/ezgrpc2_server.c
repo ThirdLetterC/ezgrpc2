@@ -11,6 +11,7 @@
 #include "ezgrpc2_timeout.h"
 #include "ezgrpc2_tls.h"
 #include "internal_helpers.h"
+#include "internal_nghttp2_callbacks.h"
 #define atlog(...) (void)0
 #define ezlog(...) (void)0
 
@@ -59,6 +60,8 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
     return nullptr;
 
   thpool_init(&server->logger_thread, 1, 0);
+  server->ipv4_sockfd = EZINVALID_SOCKET;
+  server->ipv6_sockfd = EZINVALID_SOCKET;
   server->ipv4_addr = nullptr;
   server->ipv6_addr = nullptr;
   server->ipv4_port = ipv4_port;
@@ -198,40 +201,71 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
   server->ipv4_sockfd = ipv4_sockfd;
   server->ipv6_sockfd = ipv6_sockfd;
 
+  /* once opened by a uv_tcp_t, the socket is closed by uv_close() */
   if (ipv4_sockfd != EZINVALID_SOCKET) {
-    uv_res = uv_poll_init_socket(&server->loop, &server->ipv4_poll, ipv4_sockfd);
+    uv_res = uv_tcp_init(&server->loop, &server->ipv4_listener);
     if (uv_res != 0) {
-      perror("uv_poll_init_socket ipv4");
+      perror("uv_tcp_init ipv4");
       goto err;
     }
-    server->ipv4_poll.data = server;
-    server->ipv4_poll_active = true;
-    uv_res = uv_poll_start(&server->ipv4_poll, UV_READABLE, on_listen_poll);
+    server->ipv4_listener.data = server;
+    server->ipv4_listener_active = true;
+    uv_res = uv_tcp_open(&server->ipv4_listener, ipv4_sockfd);
     if (uv_res != 0) {
-      perror("uv_poll_start ipv4");
+      perror("uv_tcp_open ipv4");
+      goto err;
+    }
+    server->ipv4_sockfd = ipv4_sockfd = EZINVALID_SOCKET;
+    uv_res = uv_listen((uv_stream_t *)&server->ipv4_listener, backlog, on_listener_connection);
+    if (uv_res != 0) {
+      perror("uv_listen ipv4");
       goto err;
     }
   }
 
   if (ipv6_sockfd != EZINVALID_SOCKET) {
-    uv_res = uv_poll_init_socket(&server->loop, &server->ipv6_poll, ipv6_sockfd);
+    uv_res = uv_tcp_init(&server->loop, &server->ipv6_listener);
     if (uv_res != 0) {
-      perror("uv_poll_init_socket ipv6");
+      perror("uv_tcp_init ipv6");
       goto err;
     }
-    server->ipv6_poll.data = server;
-    server->ipv6_poll_active = true;
-    uv_res = uv_poll_start(&server->ipv6_poll, UV_READABLE, on_listen_poll);
+    server->ipv6_listener.data = server;
+    server->ipv6_listener_active = true;
+    uv_res = uv_tcp_open(&server->ipv6_listener, ipv6_sockfd);
     if (uv_res != 0) {
-      perror("uv_poll_start ipv6");
+      perror("uv_tcp_open ipv6");
+      goto err;
+    }
+    server->ipv6_sockfd = ipv6_sockfd = EZINVALID_SOCKET;
+    uv_res = uv_listen((uv_stream_t *)&server->ipv6_listener, backlog, on_listener_connection);
+    if (uv_res != 0) {
+      perror("uv_listen ipv6");
       goto err;
     }
   }
+  if (nghttp2_session_callbacks_new(&server->ngcallbacks) != 0)
+    goto err;
+  server_setup_ngcallbacks(server->ngcallbacks);
+
+  server->rbuf_len = 64 * 1024;
+  server->rbuf = malloc(server->rbuf_len);
+  if (server->rbuf == nullptr)
+    goto err;
+
+  server->next_deadline_ms = UINT64_MAX;
 
   server->nb_sessions = server->server_settings.max_connections;
   server->sessions = calloc(server->nb_sessions, sizeof(*server->sessions));
   if (server->sessions == nullptr)
     goto err;
+
+  server->free_sessions = malloc(server->nb_sessions * sizeof(*server->free_sessions));
+  if (server->free_sessions == nullptr)
+    goto err;
+  /* lowest index on top */
+  for (size_t i = 0; i < server->nb_sessions; i++)
+    server->free_sessions[i] = server->nb_sessions - 1 - i;
+  server->nb_free_sessions = server->nb_sessions;
 
   server->paths = calloc(server->http2_settings.max_paths, sizeof(*server->paths));
   if (server->paths == nullptr)
@@ -240,18 +274,11 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
   return server;
 
 err:
-  if (server->ipv4_sockfd != EZINVALID_SOCKET) {
-    close(server->ipv4_sockfd);
-    server->ipv4_sockfd = EZINVALID_SOCKET;
-  } else if (ipv4_sockfd != EZINVALID_SOCKET) {
+  /* sockets not yet handed to a listener */
+  if (ipv4_sockfd != EZINVALID_SOCKET && ipv4_sockfd != server->ipv4_sockfd)
     close(ipv4_sockfd);
-  }
-  if (server->ipv6_sockfd != EZINVALID_SOCKET) {
-    close(server->ipv6_sockfd);
-    server->ipv6_sockfd = EZINVALID_SOCKET;
-  } else if (ipv6_sockfd != EZINVALID_SOCKET) {
+  if (ipv6_sockfd != EZINVALID_SOCKET && ipv6_sockfd != server->ipv6_sockfd)
     close(ipv6_sockfd);
-  }
   ezgrpc2_server_free(server);
   return nullptr;
 }
@@ -270,6 +297,9 @@ EZGRPC2_API int ezgrpc2_server_poll(
   server->events = events;
   server->ready_events = 0;
 
+  /* write everything queued since the last poll, one write per session */
+  server_flush_sessions(server);
+
   if (timeout > 0) {
     uv_timer_start(&server->timer, on_poll_timer, (uint64_t)timeout, 0);
     uv_run(&server->loop, UV_RUN_ONCE);
@@ -283,6 +313,11 @@ EZGRPC2_API int ezgrpc2_server_poll(
   ezgrpc2_server_check_deadlines(server);
 
   return server->ready_events;
+}
+
+EZGRPC2_API void ezgrpc2_server_flush(ezgrpc2_server *server) {
+  if (server != nullptr)
+    server_flush_sessions(server);
 }
 
 EZGRPC2_API ezgrpc2_event *ezgrpc2_server_events_read([[maybe_unused]] ezgrpc2_server *server) {
@@ -323,15 +358,13 @@ EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
   if (ezserver == nullptr)
     return;
 
-  if (ezserver->ipv4_poll_active) {
-    uv_poll_stop(&ezserver->ipv4_poll);
-    uv_close((uv_handle_t *)&ezserver->ipv4_poll, nullptr);
-    ezserver->ipv4_poll_active = false;
+  if (ezserver->ipv4_listener_active) {
+    uv_close((uv_handle_t *)&ezserver->ipv4_listener, nullptr);
+    ezserver->ipv4_listener_active = false;
   }
-  if (ezserver->ipv6_poll_active) {
-    uv_poll_stop(&ezserver->ipv6_poll);
-    uv_close((uv_handle_t *)&ezserver->ipv6_poll, nullptr);
-    ezserver->ipv6_poll_active = false;
+  if (ezserver->ipv6_listener_active) {
+    uv_close((uv_handle_t *)&ezserver->ipv6_listener, nullptr);
+    ezserver->ipv6_listener_active = false;
   }
   if (ezserver->timer_active) {
     uv_timer_stop(&ezserver->timer);
@@ -348,10 +381,16 @@ EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
     ezserver->ipv6_sockfd = EZINVALID_SOCKET;
   }
 
+  /* nobody polls a freed server, and the application may have freed
+   * its events already, so the DISCONNECT events below are not written */
+  ezserver->events = nullptr;
+
   if (ezserver->sessions != nullptr) {
+    /* deliver what the application already queued */
+    server_flush_sessions(ezserver);
     for (size_t i = 0; i < ezserver->nb_sessions; i++) {
-      if (ezserver->sessions[i].is_active || ezserver->sessions[i].is_closing) {
-        session_close_and_free(&ezserver->sessions[i]);
+      if (ezserver->sessions[i].is_active) {
+        session_close(&ezserver->sessions[i]);
       }
     }
   }
@@ -365,10 +404,15 @@ EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
     ezserver->loop_initialized = false;
   }
 
+  if (ezserver->ngcallbacks != nullptr)
+    nghttp2_session_callbacks_del(ezserver->ngcallbacks);
+  free(ezserver->rbuf);
+  free(ezserver->tls_obuf.data);
   free(ezserver->paths);
   free(ezserver->ipv4_addr);
   free(ezserver->ipv6_addr);
   free(ezserver->sessions);
+  free(ezserver->free_sessions);
   free(ezserver->interceptors);
   if (ezserver->ssl_ctx != nullptr) {
     ezgrpc2_tls_free_server_ctx(ezserver->ssl_ctx);

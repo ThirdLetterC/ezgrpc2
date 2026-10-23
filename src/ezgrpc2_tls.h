@@ -13,6 +13,7 @@ extern "C" {
 
 struct ezgrpc2_server;
 struct ezgrpc2_session;
+struct ezgrpc2_buf;
 
 #if defined(EZGRPC2_ENABLE_OPENSSL)
 typedef struct ssl_ctx_st SSL_CTX;
@@ -64,9 +65,25 @@ EZGRPC2_API struct ezgrpc2_server *ezgrpc2_server_new_tls(
 
 /**
  * Initializes SSL object for a newly accepted session if server has TLS enabled.
+ * The SSL object never touches the socket: ciphertext is exchanged through
+ * memory BIOs with :c:func:`ezgrpc2_tls_feed()` and :c:func:`ezgrpc2_tls_drain()`
+ * so that the event loop owns all socket I/O.
  * Returns 0 on success, non-zero on error.
  */
 int ezgrpc2_tls_session_init(struct ezgrpc2_session *session);
+
+/**
+ * Hands ciphertext received from the socket to the TLS layer.
+ * Returns 0 on success, non-zero on error.
+ */
+int ezgrpc2_tls_feed(struct ezgrpc2_session *session, const void *buf, size_t len);
+
+/**
+ * Appends the ciphertext produced by the TLS layer (handshake records and
+ * encrypted application data) to ``out``.
+ * Returns 0 on success, non-zero on error.
+ */
+int ezgrpc2_tls_drain(struct ezgrpc2_session *session, struct ezgrpc2_buf *out);
 
 /**
  * Performs non-blocking TLS handshake for a session.
@@ -94,7 +111,12 @@ ssize_t ezgrpc2_tls_read(struct ezgrpc2_session *session, void *buf, size_t len)
 ssize_t ezgrpc2_tls_write(struct ezgrpc2_session *session, const void *buf, size_t len);
 
 /**
- * Shuts down and frees session SSL object.
+ * Queues a close_notify alert, to be collected with :c:func:`ezgrpc2_tls_drain()`.
+ */
+void ezgrpc2_tls_close_notify(struct ezgrpc2_session *session);
+
+/**
+ * Frees session SSL object.
  */
 void ezgrpc2_tls_session_free(struct ezgrpc2_session *session);
 

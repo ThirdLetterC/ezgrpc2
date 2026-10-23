@@ -46,6 +46,16 @@ struct ezgrpc2_event {
 };
 ```
 
+### I/O model and performance
+
+Each `ezgrpc2_server` owns one libuv loop, driven by `ezgrpc2_server_poll()`:
+
+- Connections are `uv_tcp_t` streams. Reads land in a shared buffer and go straight to `nghttp2_session_mem_recv()`.
+- `ezgrpc2_server_session_stream_send()`, `..._stream_end()` and similar calls only **queue** frames. At the start of the next `ezgrpc2_server_poll()`, everything queued for a connection (HEADERS, DATA and trailers of every stream) is written with a single write. Call `ezgrpc2_server_flush()` if your next poll may be delayed.
+- TLS uses memory BIOs, so a batch is encrypted with one `SSL_write()`.
+
+A libuv loop runs on one thread. To use more cores, run one server per thread on the same port. The listening sockets use `SO_REUSEPORT`, so the kernel spreads connections across the loops (see `THREADS=N` in `examples/python_client_c_server/server.c`). Note that a single HTTP/2 connection always stays on one loop. Load generators such as `ghz` open only one connection by default, so pass `--connections=N` to measure more than one loop.
+
 ---
 
 ## Requirements & Dependencies

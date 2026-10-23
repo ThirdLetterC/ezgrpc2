@@ -68,11 +68,14 @@ libezgrpc2.so : $(objects)
 libezgrpc2.dll : $(objects)
 	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -luv -o $@
 
+# -MMD: rebuild objects when a header (e.g. the structs in core.h) changes
 %.o : %.c
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
+
+-include $(objects:.o=.d)
 
 clean :
-	rm -f $(targets) *.o
+	rm -f $(targets) *.o *.d
 	$(MAKE) -C tests clean
 
 test:

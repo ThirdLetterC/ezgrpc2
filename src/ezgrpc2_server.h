@@ -97,6 +97,18 @@ EZGRPC2_API int ezgrpc2_server_poll(
   int timeout);
 
 
+/**
+ * The :c:func:`ezgrpc2_server_flush()` function writes the output queued by
+ * :c:func:`ezgrpc2_server_session_stream_send()`, :c:func:`ezgrpc2_server_session_stream_end()`
+ * and friends.
+ *
+ * Those functions only queue frames. Everything queued for a session, across all of
+ * its streams, is written with a single write when :c:func:`ezgrpc2_server_poll()` is
+ * called next, so most applications never need this function. Call it when the next
+ * poll may be delayed.
+ */
+EZGRPC2_API void ezgrpc2_server_flush(ezgrpc2_server *server);
+
 EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path, void *userdata, uint64_t accept_content_type, uint64_t accept_content_encoding);
 
 EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, const char *path);

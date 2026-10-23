@@ -3,7 +3,9 @@
 #include <stdio.h>
 #include "ezgrpc2_tls.h"
 #include "ezgrpc2_server.h"
+#include <limits.h>
 #include "core.h"
+#include "internal_helpers.h"
 
 #if defined(EZGRPC2_ENABLE_OPENSSL)
 #include <openssl/ssl.h>
@@ -102,12 +104,57 @@ int ezgrpc2_tls_session_init(ezgrpc2_session *session) {
     return 1;
   }
 
-  SSL_set_fd(ssl, session->sockfd);
+  BIO *rbio = BIO_new(BIO_s_mem());
+  BIO *wbio = BIO_new(BIO_s_mem());
+  if (rbio == nullptr || wbio == nullptr) {
+    BIO_free(rbio);
+    BIO_free(wbio);
+    SSL_free(ssl);
+    return 1;
+  }
+  /* an empty read BIO means "wait for more data", not EOF */
+  BIO_set_mem_eof_return(rbio, -1);
+  SSL_set_bio(ssl, rbio, wbio);
   SSL_set_accept_state(ssl);
 
   session->ssl = ssl;
   session->is_tls = 1;
   session->tls_handshake_done = 0;
+  return 0;
+}
+
+int ezgrpc2_tls_feed(ezgrpc2_session *session, const void *buf, size_t len) {
+  if (session == nullptr || session->ssl == nullptr) {
+    return 1;
+  }
+  BIO *rbio = SSL_get_rbio(session->ssl);
+  while (len > 0) {
+    int n = BIO_write(rbio, buf, len > INT_MAX ? INT_MAX : (int)len);
+    if (n <= 0) {
+      return 1;
+    }
+    buf = (const u8 *)buf + n;
+    len -= (size_t)n;
+  }
+  return 0;
+}
+
+int ezgrpc2_tls_drain(ezgrpc2_session *session, ezgrpc2_buf *out) {
+  if (session == nullptr || session->ssl == nullptr) {
+    return 1;
+  }
+  BIO *wbio = SSL_get_wbio(session->ssl);
+  size_t pending;
+  while ((pending = BIO_ctrl_pending(wbio)) > 0) {
+    if (buf_reserve(out, pending)) {
+      return 1;
+    }
+    int n = BIO_read(wbio, out->data + out->len, pending > INT_MAX ? INT_MAX : (int)pending);
+    if (n <= 0) {
+      return 1;
+    }
+    out->len += (size_t)n;
+  }
   return 0;
 }
 
@@ -119,7 +166,7 @@ int ezgrpc2_tls_handshake(ezgrpc2_session *session) {
     return 1;
   }
 
-  int ret = SSL_accept(session->ssl);
+  int ret = SSL_do_handshake(session->ssl);
   if (ret == 1) {
     session->tls_handshake_done = 1;
     return 1;
@@ -175,9 +222,14 @@ ssize_t ezgrpc2_tls_write(ezgrpc2_session *session, const void *buf, size_t len)
   return -1;
 }
 
+void ezgrpc2_tls_close_notify(ezgrpc2_session *session) {
+  if (session != nullptr && session->ssl != nullptr) {
+    (void)SSL_shutdown(session->ssl);
+  }
+}
+
 void ezgrpc2_tls_session_free(ezgrpc2_session *session) {
   if (session != nullptr && session->ssl != nullptr) {
-    SSL_shutdown(session->ssl);
     SSL_free(session->ssl);
     session->ssl = nullptr;
     session->is_tls = 0;
@@ -201,6 +253,14 @@ int ezgrpc2_tls_session_init([[maybe_unused]] ezgrpc2_session *session) {
   return 0;
 }
 
+int ezgrpc2_tls_feed([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] const void *buf, [[maybe_unused]] size_t len) {
+  return 1;
+}
+
+int ezgrpc2_tls_drain([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] ezgrpc2_buf *out) {
+  return 1;
+}
+
 int ezgrpc2_tls_handshake([[maybe_unused]] ezgrpc2_session *session) {
   return 1;
 }
@@ -212,6 +272,8 @@ ssize_t ezgrpc2_tls_read([[maybe_unused]] ezgrpc2_session *session, [[maybe_unus
 ssize_t ezgrpc2_tls_write([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] const void *buf, [[maybe_unused]] size_t len) {
   return -1;
 }
+
+void ezgrpc2_tls_close_notify([[maybe_unused]] ezgrpc2_session *session) {}
 
 void ezgrpc2_tls_session_free([[maybe_unused]] ezgrpc2_session *session) {}
 

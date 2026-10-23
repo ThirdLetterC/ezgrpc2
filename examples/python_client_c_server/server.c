@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <assert.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "ezgrpc2.h"
 #include "helloworld.pb-c.h"
@@ -23,8 +24,9 @@ typedef struct client_stream_state_t {
   char names[MAX_CLIENT_STREAM_REQS][64];
 } client_stream_state_t;
 
-static client_stream_state_t s_client_streams[32];
-static size_t s_client_streams_count = 0;
+/* per thread: each worker thread runs its own server and event loop */
+static _Thread_local client_stream_state_t s_client_streams[32];
+static _Thread_local size_t s_client_streams_count = 0;
 
 static client_stream_state_t *get_or_create_client_stream(int32_t stream_id) {
   for (size_t i = 0; i < s_client_streams_count; i++) {
@@ -282,111 +284,98 @@ static ezgrpc2_grpc_status logging_pre_hook(
   return EZGRPC2_GRPC_STATUS_OK;
 }
 
+static void handle_event(ezgrpc2_server *server, ezgrpc2_event *event) {
+  if (ezgrpc2_health_handle_event(server, event)) {
+    return;
+  }
+  if (ezgrpc2_reflection_handle_event(server, event)) {
+    return;
+  }
+
+  switch (event->type) {
+  case EZGRPC2_EVENT_MESSAGE: {
+    method_handler_t *handler = event->userdata;
+    if (handler != nullptr && handler->handler != nullptr) {
+      if (!ezgrpc2_server_intercept_pre(server, event, handler->name)) {
+        break;
+      }
+      handler->handler(server, event);
+    }
+    break;
+  }
+  case EZGRPC2_EVENT_DATALOSS:
+    ezgrpc2_server_session_stream_end(
+        server, event->session_uuid, event->dataloss.stream_id,
+        EZGRPC2_GRPC_STATUS_DATA_LOSS);
+    break;
+  case EZGRPC2_EVENT_TIMEOUT:
+    if (!g_quiet) printf("[server] Stream %d timed out (deadline exceeded)\n", event->timeout.stream_id);
+    break;
+  case EZGRPC2_EVENT_CANCEL:
+    if (!g_quiet) printf("[server] Stream %d cancelled by client\n", event->cancel.stream_id);
+    break;
+  case EZGRPC2_EVENT_CONNECT:
+    if (!g_quiet) printf("[server] New client connection\n");
+    break;
+  case EZGRPC2_EVENT_DISCONNECT:
+    if (!g_quiet) printf("[server] Client disconnected\n");
+    break;
+  }
+}
+
 static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
   ezgrpc2_event *event;
   size_t nb_event;
 
   while ((event = ezgrpc2_events_read(events, &nb_event)) != nullptr) {
     for (size_t i = 0; i < nb_event; i++) {
-      if (ezgrpc2_health_handle_event(server, &event[i])) {
-        continue;
-      }
-      if (ezgrpc2_reflection_handle_event(server, &event[i])) {
-        continue;
-      }
-
-      switch (event[i].type) {
-      case EZGRPC2_EVENT_MESSAGE: {
-        method_handler_t *handler = event[i].userdata;
-        if (handler != nullptr && handler->handler != nullptr) {
-          if (!ezgrpc2_server_intercept_pre(server, &event[i], handler->name)) {
-            break;
-          }
-          handler->handler(server, &event[i]);
-        }
-        break;
-      }
-      case EZGRPC2_EVENT_DATALOSS:
-        ezgrpc2_server_session_stream_end(
-            server, event[i].session_uuid, event[i].dataloss.stream_id,
-            EZGRPC2_GRPC_STATUS_DATA_LOSS);
-        break;
-      case EZGRPC2_EVENT_TIMEOUT:
-        if (!g_quiet) printf("[server] Stream %d timed out (deadline exceeded)\n", event[i].timeout.stream_id);
-        break;
-      case EZGRPC2_EVENT_CANCEL:
-        if (!g_quiet) printf("[server] Stream %d cancelled by client\n", event[i].cancel.stream_id);
-        break;
-      case EZGRPC2_EVENT_CONNECT:
-        if (!g_quiet) printf("[server] New client connection\n");
-        break;
-      case EZGRPC2_EVENT_DISCONNECT:
-        if (!g_quiet) printf("[server] Client disconnected\n");
-        break;
+      handle_event(server, &event[i]);
+      /* the application owns the received messages */
+      if (event[i].type == EZGRPC2_EVENT_MESSAGE) {
+        ezgrpc2_messages_free(event[i].message.messages);
       }
     }
     ezgrpc2_free(event);
   }
 }
 
-int main(int argc, char *argv[]) {
-  setvbuf(stdout, NULL, _IONBF, 0);
-  setvbuf(stderr, NULL, _IONBF, 0);
+static method_handler_t say_hello_handler = {"SayHello", handle_say_hello};
+static method_handler_t say_hello_again_handler = {"SayHelloAgain", handle_say_hello_again};
+static method_handler_t say_hello_stream_handler = {"SayHelloStream", handle_say_hello_stream};
+static method_handler_t say_hello_client_stream_handler = {"SayHelloClientStream", handle_say_hello_client_stream};
+static method_handler_t say_hello_bidi_stream_handler = {"SayHelloBidiStream", handle_say_hello_bidi_stream};
+static method_handler_t say_hello_error_handler = {"SayHelloWithError", handle_say_hello_with_error};
 
-  int port = 19009;
-  if (argc > 1) {
-    port = atoi(argv[1]);
-    if (port <= 0 || port > 65535) port = 19009;
-  }
-  if (argc > 2) {
-    g_quiet = atoi(argv[2]);
-  }
+typedef struct serve_config_t {
+  int port;
+  int use_tls;
+  const char *cert_file;
+  const char *key_file;
+  int is_main;
+} serve_config_t;
 
-  int use_tls = 0;
-  const char *cert_file = "server.crt";
-  const char *key_file = "server.key";
+/* Runs one server with its own event loop. With THREADS=N, N of these run
+ * in parallel: SO_REUSEPORT lets each bind the same port and the kernel
+ * spreads the incoming connections across them. */
+static void *serve(void *arg) {
+  const serve_config_t *cfg = arg;
+  int port = cfg->port;
 
-  if (getenv("USE_TLS") != nullptr && atoi(getenv("USE_TLS")) != 0) {
-    use_tls = 1;
-  }
-  if (argc > 3) {
-    use_tls = atoi(argv[3]);
-  }
-  if (argc > 4) {
-    cert_file = argv[4];
-  }
-  if (argc > 5) {
-    key_file = argv[5];
-  }
-
-  signal(SIGPIPE, SIG_IGN);
-  signal(SIGINT, sig_handler);
-  signal(SIGTERM, sig_handler);
-
-  (void)ezgrpc2_global_init(0);
-
-  method_handler_t say_hello_handler = {"SayHello", handle_say_hello};
-  method_handler_t say_hello_again_handler = {"SayHelloAgain", handle_say_hello_again};
-  method_handler_t say_hello_stream_handler = {"SayHelloStream", handle_say_hello_stream};
-  method_handler_t say_hello_client_stream_handler = {"SayHelloClientStream", handle_say_hello_client_stream};
-  method_handler_t say_hello_bidi_stream_handler = {"SayHelloBidiStream", handle_say_hello_bidi_stream};
-  method_handler_t say_hello_error_handler = {"SayHelloWithError", handle_say_hello_with_error};
-
-  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, 16, nullptr, nullptr);
+  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", port, "::", port, 1024, nullptr, nullptr);
   if (server == nullptr) {
     fprintf(stderr, "Failed to create ezgrpc2 server on port %d\n", port);
-    return 1;
+    return (void *)1;
   }
 
-  if (use_tls) {
-    if (ezgrpc2_server_enable_tls(server, cert_file, key_file) != 0) {
-      fprintf(stderr, "Failed to enable TLS on server (cert='%s', key='%s')\n", cert_file, key_file);
+  if (cfg->use_tls) {
+    if (ezgrpc2_server_enable_tls(server, cfg->cert_file, cfg->key_file) != 0) {
+      fprintf(stderr, "Failed to enable TLS on server (cert='%s', key='%s')\n", cfg->cert_file, cfg->key_file);
       ezgrpc2_server_free(server);
-      return 1;
+      return (void *)1;
     }
-    printf("[server] Greeter gRPC server listening on port %d (TLS/SSL enabled)...\n", port);
+    if (cfg->is_main) printf("[server] Greeter gRPC server listening on port %d (TLS/SSL enabled)...\n", port);
   } else {
-    printf("[server] Greeter gRPC server listening on port %d (IPv4 & IPv6)...\n", port);
+    if (cfg->is_main) printf("[server] Greeter gRPC server listening on port %d (IPv4 & IPv6)...\n", port);
   }
 
   /* Register service methods */
@@ -415,6 +404,7 @@ int main(int argc, char *argv[]) {
   ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
 
   while (g_running) {
+    /* also writes the responses queued by the previous handle_events() */
     int res = ezgrpc2_server_poll(server, events, 500);
     if (res >= 0) {
       handle_events(server, events);
@@ -423,9 +413,76 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  printf("\n[server] Shutting down...\n");
   ezgrpc2_events_free(events);
   ezgrpc2_server_free(server);
+  return nullptr;
+}
+
+int main(int argc, char *argv[]) {
+  setvbuf(stdout, NULL, _IONBF, 0);
+  setvbuf(stderr, NULL, _IONBF, 0);
+
+  serve_config_t cfg = {
+      .port = 19009,
+      .use_tls = 0,
+      .cert_file = "server.crt",
+      .key_file = "server.key",
+      .is_main = 1,
+  };
+
+  if (argc > 1) {
+    cfg.port = atoi(argv[1]);
+    if (cfg.port <= 0 || cfg.port > 65535) cfg.port = 19009;
+  }
+  if (argc > 2) {
+    g_quiet = atoi(argv[2]);
+  }
+
+  if (getenv("USE_TLS") != nullptr && atoi(getenv("USE_TLS")) != 0) {
+    cfg.use_tls = 1;
+  }
+  if (argc > 3) {
+    cfg.use_tls = atoi(argv[3]);
+  }
+  if (argc > 4) {
+    cfg.cert_file = argv[4];
+  }
+  if (argc > 5) {
+    cfg.key_file = argv[5];
+  }
+
+  /* number of event loops (one per thread) */
+  int nb_threads = 1;
+  if (getenv("THREADS") != nullptr) {
+    nb_threads = atoi(getenv("THREADS"));
+    if (nb_threads < 1) nb_threads = 1;
+    if (nb_threads > 256) nb_threads = 256;
+  }
+
+  signal(SIGPIPE, SIG_IGN);
+  signal(SIGINT, sig_handler);
+  signal(SIGTERM, sig_handler);
+
+  (void)ezgrpc2_global_init(0);
+
+  serve_config_t worker_cfg = cfg;
+  worker_cfg.is_main = 0;
+  pthread_t workers[256];
+  int nb_workers = 0;
+  for (; nb_workers < nb_threads - 1; nb_workers++) {
+    if (pthread_create(&workers[nb_workers], nullptr, serve, &worker_cfg) != 0) {
+      fprintf(stderr, "pthread_create failed\n");
+      break;
+    }
+  }
+
+  void *res = serve(&cfg);
+  g_running = 0;
+  for (int i = 0; i < nb_workers; i++) {
+    pthread_join(workers[i], nullptr);
+  }
+
+  printf("\n[server] Shutting down...\n");
   ezgrpc2_global_cleanup();
-  return 0;
+  return res == nullptr ? 0 : 1;
 }
