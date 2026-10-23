@@ -296,13 +296,13 @@ int session_create(
       struct sockaddr_in *sa = (struct sockaddr_in *)sockaddr;
       inet_ntop(AF_INET, &sa->sin_addr.s_addr,
                 ezsession->client_addr, sizeof(ezsession->client_addr) - 1);
-      ezsession->client_port = sa->sin_port;
+      ezsession->client_port = ntohs(sa->sin_port);
     } break;
     case AF_INET6: {
       struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)sockaddr;
       inet_ntop(AF_INET6, sa6->sin6_addr.s6_addr,
                 ezsession->client_addr, sizeof(ezsession->client_addr) - 1);
-      ezsession->client_port = sa6->sin6_port;
+      ezsession->client_port = ntohs(sa6->sin6_port);
     } break;
     default:
       abort();

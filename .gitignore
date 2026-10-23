@@ -16,6 +16,14 @@ src/tests/pthpool
 src/tests/mem
 src/tests/pb
 src/tests/roadmap
+src/tests/metadata
+src/tests/timeout
+src/tests/compression
+src/tests/health
+src/tests/interceptor
+src/tests/status_details
+src/tests/reflection
+src/tests/tls
 src/tests/*.pb-c.*
 *.pb-c.*
 *_pb2.py
@@ -23,3 +31,9 @@ src/tests/*.pb-c.*
 *_pb2.pyi
 __pycache__/
 *.log
+
+# generated self-signed certs/keys for tests and examples
+src/tests/test_cert.pem
+src/tests/test_key.pem
+examples/python_client_c_server/server.crt
+examples/python_client_c_server/server.key

@@ -97,7 +97,7 @@ ssize_t data_source_read_callback2([[maybe_unused]] nghttp2_session *ngsession,
         /* buf is fully written */
         goto exit;
       }
-      assert(msg->len > ezstream->trunc_seek);
+      assert(msg->len >= ezstream->trunc_seek);
       bool is_fit = msg->len - ezstream->trunc_seek <= rem;
       size_t to_write = is_fit ? msg->len - ezstream->trunc_seek : rem;
       memcpy(buf + buf_seek, msg->data + ezstream->trunc_seek, to_write);

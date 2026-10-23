@@ -167,7 +167,7 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
       goto err;
     }
 
-    if (listen(ipv6_sockfd, 16) == EZSOCKET_ERROR) {
+    if (listen(ipv6_sockfd, backlog) == EZSOCKET_ERROR) {
       perror("listen ipv6");
       goto err;
     }
