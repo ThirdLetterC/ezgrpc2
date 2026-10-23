@@ -454,6 +454,21 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
   return 0;
 }
 
+/* the client cancelled the call (or hit its deadline) by resetting the stream.
+ * nghttp2 invokes this before on_stream_close_callback, so ezstream is still alive. */
+static inline int on_frame_recv_rst_stream(ezgrpc2_session *ezsession, ezgrpc2_stream *ezstream, const nghttp2_frame *frame) {
+  if (ezstream == nullptr || ezstream->path == nullptr) {
+    return 0;
+  }
+  ezgrpc2_event event = {};
+  event.type = EZGRPC2_EVENT_CANCEL;
+  event.session_uuid = ezsession->session_uuid;
+  event.userdata = ezstream->path->userdata;
+  event.cancel.stream_id = frame->hd.stream_id;
+  ezgrpc2_events_write(ezsession->server->events, event);
+  return 0;
+}
+
 static int on_frame_send_callback([[maybe_unused]] nghttp2_session *session,
                                   const nghttp2_frame *frame, [[maybe_unused]] void *user_data) {
 #ifdef EZGRPC2_TRACE
@@ -499,6 +514,9 @@ static int on_frame_recv_callback([[maybe_unused]] nghttp2_session *session,
     case NGHTTP2_DATA:
       EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[DATA, sid=%d, eos=%d, len=%zu]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length);
       return on_frame_recv_data(ezsession, frame);
+    case NGHTTP2_RST_STREAM:
+      EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[RST_STREAM, sid=%d, error_code=%u]\n", frame->hd.stream_id, frame->rst_stream.error_code);
+      return on_frame_recv_rst_stream(ezsession, ezstream, frame);
     case NGHTTP2_WINDOW_UPDATE:
       EZGRPC2_LOG_TRACE(ezsession->server, "< FRAME[WINDOW_UPDATE, sid=%d, eos=%d, len=%zu, wsi=%d]\n", frame->hd.stream_id, !!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM), frame->hd.length, frame->window_update.window_size_increment);
       break;
@@ -541,7 +559,9 @@ static int on_stream_close_callback(nghttp2_session *session, i32 stream_id,
   atlog("stream %d closed\n", stream_id);
   ezgrpc2_session *ezsession = user_data;
   ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
-  assert(ezstream == ezgrpc2_list_remove(ezsession->lstreams, list_cmp_ezstream_id, &stream_id));
+  /* keep the removal outside assert() so it still runs with -DNDEBUG */
+  [[maybe_unused]] ezgrpc2_stream *removed = ezgrpc2_list_remove(ezsession->lstreams, list_cmp_ezstream_id, &stream_id);
+  assert(ezstream == removed);
   stream_free(ezstream);
 
   return 0;
