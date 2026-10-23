@@ -114,6 +114,8 @@ endif()
 # ulog also supports pre-C23 GCC/Clang through __auto_type. Use that spelling
 # for compilers that only accept the draft -std=c2x mode.
 if(NOT GRPC_HAS_C23)
+  # bool is a C23 keyword, but draft C2x compilers still need the header.
+  target_compile_options(ulog PRIVATE -include stdbool.h)
   target_compile_definitions(ulog PRIVATE auto=__auto_type)
 endif()
 
