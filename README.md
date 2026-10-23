@@ -79,15 +79,15 @@ selects info; `GRPC_LOG_OFF` disables server logs. Logging uses the vendored
 
 ### Performance
 
-Measured on localhost with `h2load` sending unary `SayHello` calls to the example server built with `MIMALLOC=1`:
+Measured on localhost with `ghz` sending unary `SayHello` calls to the Release example server, built with the default libc allocator. The server was pinned to CPUs 0–7 and the client to CPUs 8–15 on an Intel Core i9-9900K (8 cores / 16 threads). Each result is the median of three runs; each run warmed up with 5,000 calls, then sent 300,000 calls and excluded the first 5,000 from the reported rate.
 
-| Setup | Requests/s |
-|:---|---:|
-| 1 loop, 16 connections × 32 concurrent streams | ~490k |
-| 1 loop, 100 connections × 1 stream | ~147k |
-| 8 loops, 64 connections × 32 concurrent streams | ~1.8M |
+| Setup | Before | After | Change |
+|:---|---:|---:|---:|
+| 1 loop, 16 connections × 32 concurrent calls | 83.4k req/s | 83.4k req/s | +0.1% |
+| 1 loop, 100 connections × 1 concurrent call | 56.2k req/s | 57.9k req/s | +2.9% |
+| 8 loops, 64 connections × 32 concurrent calls | 76.9k req/s | 77.5k req/s | +0.9% |
 
-Numbers depend on hardware and on the client. A single `ghz` process with its default one connection tops out well below what one loop can serve, so pass `--connections=N` to `ghz` or use `h2load`.
+“Before” is the revision immediately before the receive-buffer, request-header, and message-compression optimizations; “After” includes those changes. Both used the same compiler, build options, server/client CPU affinity, payload (`{"name":"benchmark_user"}`), and `ghz` settings. The results are close to run-to-run variation, so treat them as updated reference measurements rather than a clear throughput gain. Results depend on hardware and client capacity; set `--connections` high enough to keep the server busy.
 
 ---
 
