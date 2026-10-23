@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ezgrpc2_defs.h"
+#include "grpc_defs.h"
 
 typedef char i8;
 typedef uint8_t u8;
@@ -24,7 +24,7 @@ typedef uint64_t u64;
 #endif
 
 /* Round size up to the next multiple of a power-of-two alignment. */
-static inline size_t ezgrpc2_align_up(size_t size, size_t alignment) {
+static inline size_t grpc_align_up(size_t size, size_t alignment) {
   return (size + alignment - 1) & ~(alignment - 1);
 }
 

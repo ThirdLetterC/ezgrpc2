@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include "ezgrpc2.h"
+#include "grpc.h"
 #include "unity.h"
 
 void setUp(void) {}
@@ -18,20 +18,20 @@ void test_metadata_base64_roundtrip(void) {
     size_t orig_len = strlen(orig);
 
     size_t enc_len = 0;
-    char *encoded = ezgrpc2_metadata_encode_bin((const uint8_t *)orig, orig_len, &enc_len);
+    char *encoded = grpc_metadata_encode_bin((const uint8_t *)orig, orig_len, &enc_len);
     TEST_ASSERT_NOT_NULL(encoded);
     TEST_ASSERT_EQUAL_UINT64(enc_len, strlen(encoded));
 
     size_t dec_len = 0;
-    uint8_t *decoded = ezgrpc2_metadata_decode_bin(encoded, enc_len, &dec_len);
+    uint8_t *decoded = grpc_metadata_decode_bin(encoded, enc_len, &dec_len);
     TEST_ASSERT_NOT_NULL(decoded);
     TEST_ASSERT_EQUAL_UINT64(orig_len, dec_len);
     if (orig_len > 0) {
       TEST_ASSERT_EQUAL_MEMORY(orig, decoded, orig_len);
     }
 
-    ezgrpc2_free(encoded);
-    ezgrpc2_free(decoded);
+    grpc_free(encoded);
+    grpc_free(decoded);
   }
 }
 
@@ -42,26 +42,26 @@ void test_metadata_binary_random_bytes(void) {
   }
 
   size_t enc_len = 0;
-  char *encoded = ezgrpc2_metadata_encode_bin(raw, sizeof(raw), &enc_len);
+  char *encoded = grpc_metadata_encode_bin(raw, sizeof(raw), &enc_len);
   TEST_ASSERT_NOT_NULL(encoded);
 
   size_t dec_len = 0;
-  uint8_t *decoded = ezgrpc2_metadata_decode_bin(encoded, enc_len, &dec_len);
+  uint8_t *decoded = grpc_metadata_decode_bin(encoded, enc_len, &dec_len);
   TEST_ASSERT_NOT_NULL(decoded);
   TEST_ASSERT_EQUAL_UINT64(sizeof(raw), dec_len);
   TEST_ASSERT_EQUAL_MEMORY(raw, decoded, sizeof(raw));
 
-  ezgrpc2_free(encoded);
-  ezgrpc2_free(decoded);
+  grpc_free(encoded);
+  grpc_free(decoded);
 }
 
 void test_metadata_null_handling(void) {
-  TEST_ASSERT_NULL(ezgrpc2_metadata_encode_bin(nullptr, 0, nullptr));
-  TEST_ASSERT_NULL(ezgrpc2_metadata_decode_bin(nullptr, 0, nullptr));
-  TEST_ASSERT_NULL(ezgrpc2_call_metadata(nullptr, "test", nullptr));
-  TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_call_metadata_count(nullptr));
-  ezgrpc2_metadata entry;
-  TEST_ASSERT_FALSE(ezgrpc2_call_metadata_at(nullptr, 0, &entry));
+  TEST_ASSERT_NULL(grpc_metadata_encode_bin(nullptr, 0, nullptr));
+  TEST_ASSERT_NULL(grpc_metadata_decode_bin(nullptr, 0, nullptr));
+  TEST_ASSERT_NULL(grpc_call_metadata(nullptr, "test", nullptr));
+  TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)grpc_call_metadata_count(nullptr));
+  grpc_metadata entry;
+  TEST_ASSERT_FALSE(grpc_call_metadata_at(nullptr, 0, &entry));
 }
 
 int main(void) {

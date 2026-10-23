@@ -1,4 +1,4 @@
-# Formatting for the ezgrpc2 C sources. Run `cmake --build build --target format` (or `format-check`).
+# Formatting for the grpc C sources. Run `cmake --build build --target format` (or `format-check`).
 BasedOnStyle: LLVM
 Language: C
 Standard: Latest
@@ -28,7 +28,7 @@ InsertNewlineAtEOF: true
 KeepEmptyLines:
   AtStartOfBlock: false
 
-# ezgrpc2_mem.h overrides malloc() and friends with macros, so the
+# grpc_mem.h overrides malloc() and friends with macros, so the
 # order of includes is significant and must not be changed.
 SortIncludes: Never
 IncludeBlocks: Preserve

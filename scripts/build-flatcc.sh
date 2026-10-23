@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Builds flatcc, the FlatBuffers compiler and runtime for C, and installs it
-# into a prefix that the ezgrpc2 build can use:
+# into a prefix that the grpc build can use:
 #
 #   scripts/build-flatcc.sh <prefix> [workdir]
-#   cmake -S . -B build-flatcc -DEZGRPC2_FLATCC=ON -DEZGRPC2_FLATCC_PREFIX=<prefix>
+#   cmake -S . -B build-flatcc -DGRPC_FLATCC=ON -DGRPC_FLATCC_PREFIX=<prefix>
 #
 # The source is pinned to a release and verified against a SHA-256 checksum.
 # The prefix receives bin/flatcc, include/flatcc and lib/libflatccrt.a.
@@ -36,7 +36,7 @@ rm -rf "${workdir:?}/$srcdir"
 tar -xzf "$tarball" -C "$workdir"
 src=$workdir/$srcdir
 
-# the runtime is linked into libezgrpc2.so as well, so it must be PIC
+# the runtime is linked into libgrpc.so as well, so it must be PIC
 cmake -S "$src" -B "$src/build" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$prefix" \

@@ -1,24 +1,24 @@
-# EZgRPC2
+# gRPC
 
 > [!NOTE]
 > This repository is under active development; we’re tightening the bolts and refueling the engine! The hangar doors are wide open: you are encouraged to kick the tires, poke the wires, and take it for a spin in your local environment. If you manage to break the sound barrier (or find a bug), please let us know.
 
-**EZgRPC2** is a lightweight, high-performance gRPC server library in C23 for Linux. It is built on [libuv](https://libuv.org/) and [nghttp2](https://nghttp2.org/), and exposes a simple poll-and-handle API: no hidden threads, no code generator, no callback soup. You decide how requests are scheduled, how memory is allocated, and how many cores to use.
+**gRPC** is a lightweight, high-performance gRPC server library in C23 for Linux. It is built on [libuv](https://libuv.org/) and [nghttp2](https://nghttp2.org/), and exposes a simple poll-and-handle API: no hidden threads, no code generator, no callback soup. You decide how requests are scheduled, how memory is allocated, and how many cores to use.
 
 ---
 
 ## Features
 
-- **Poll-based API**: one call (`ezgrpc2_server_poll()`) runs the event loop and returns a batch of events (connections, messages, cancellations, deadlines) for you to handle.
+- **Poll-based API**: one call (`grpc_server_poll()`) runs the event loop and returns a batch of events (connections, messages, cancellations, deadlines) for you to handle.
 - **All 4 RPC modes**: unary, server streaming, client streaming and bidirectional streaming.
 - **TLS with ALPN**: HTTP/2 over TLS 1.2 and 1.3, negotiating `h2`. Seven TLS libraries are supported: OpenSSL, LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls (see [TLS backends](#tls-backends)).
-- **Protobuf-C helpers**: optional [`protobuf-c`](https://github.com/protobuf-c/protobuf-c) integration (`EZGRPC2_PB_UNPACK`, `ezgrpc2_pb_create_response`).
-- **FlatBuffers helpers**: optional [`flatcc`](https://github.com/dvidelabs/flatcc) integration with verified, zero-copy reads (`EZGRPC2_FB_UNPACK`, `ezgrpc2_fb_create_response`).
-- **Interceptors**: pre-call hooks run with `ezgrpc2_server_intercept_pre()`, post-call hooks with `ezgrpc2_server_intercept_post()`. A built-in Bearer token interceptor is available (`ezgrpc2_interceptor_create_bearer_auth`).
+- **Protobuf-C helpers**: optional [`protobuf-c`](https://github.com/protobuf-c/protobuf-c) integration (`GRPC_PB_UNPACK`, `grpc_pb_create_response`).
+- **FlatBuffers helpers**: optional [`flatcc`](https://github.com/dvidelabs/flatcc) integration with verified, zero-copy reads (`GRPC_FB_UNPACK`, `grpc_fb_create_response`).
+- **Interceptors**: pre-call hooks run with `grpc_server_intercept_pre()`, post-call hooks with `grpc_server_intercept_post()`. A built-in Bearer token interceptor is available (`grpc_interceptor_create_bearer_auth`).
 - **Health checking**: the standard `/grpc.health.v1.Health/Check` service with per-service status.
 - **Server reflection**: `grpc.reflection.v1` and `v1alpha` `ServerReflectionInfo`.
 - **Metadata**: read request headers, send initial metadata and trailers, and Base64 `*-bin` values.
-- **Deadlines**: `grpc-timeout` is parsed. Expired streams are ended with `DEADLINE_EXCEEDED` and reported as `EZGRPC2_EVENT_TIMEOUT`.
+- **Deadlines**: `grpc-timeout` is parsed. Expired streams are ended with `DEADLINE_EXCEEDED` and reported as `GRPC_EVENT_TIMEOUT`.
 - **Message compression**: gzip and deflate through zlib, plus optional Zstandard and Snappy codecs. Select the codec and compression level per message.
 - **Rich error model**: `google.rpc.Status` with `Any` details (e.g. `ErrorInfo`) sent in `grpc-status-details-bin`.
 - **Pluggable allocators**: libc `malloc`, `mimalloc`, `jemalloc`, or your own allocator set at runtime.
@@ -30,25 +30,25 @@
 You register service paths, then poll for events and answer them:
 
 ```c
-struct ezgrpc2_event {
+struct grpc_event {
   union {
-    ezgrpc2_event_message  message;   // Received gRPC messages on a stream
-    ezgrpc2_event_dataloss dataloss;  // Truncated message at end of stream
-    ezgrpc2_event_cancel   cancel;    // Stream cancelled by the client (RST_STREAM)
-    ezgrpc2_event_timeout  timeout;   // Stream deadline exceeded
+    grpc_event_message  message;   // Received gRPC messages on a stream
+    grpc_event_dataloss dataloss;  // Truncated message at end of stream
+    grpc_event_cancel   cancel;    // Stream cancelled by the client (RST_STREAM)
+    grpc_event_timeout  timeout;   // Stream deadline exceeded
   };
-  ezgrpc2_event_type type;            // EZGRPC2_EVENT_CONNECT, _DISCONNECT, _MESSAGE, ...
-  ezgrpc2_session_uuid session_uuid;  // Identifies the client connection
+  grpc_event_type type;            // GRPC_EVENT_CONNECT, _DISCONNECT, _MESSAGE, ...
+  grpc_session_uuid session_uuid;  // Identifies the client connection
   void *userdata;                     // The pointer you registered with the path
 };
 ```
 
 ### I/O model
 
-Each `ezgrpc2_server` owns one libuv loop, driven by `ezgrpc2_server_poll()`:
+Each `grpc_server` owns one libuv loop, driven by `grpc_server_poll()`:
 
 - Connections are libuv TCP streams (`uv_tcp_t`). Received bytes go straight from a shared read buffer into nghttp2.
-- `ezgrpc2_server_session_stream_send()`, `..._stream_end()` and similar calls only **queue** frames. At the start of the next `ezgrpc2_server_poll()`, everything queued for a connection (headers, data and trailers of all its streams) is written with a single write. If your next poll may be delayed, call `ezgrpc2_server_flush()`.
+- `grpc_server_session_stream_send()`, `..._stream_end()` and similar calls only **queue** frames. At the start of the next `grpc_server_poll()`, everything queued for a connection (headers, data and trailers of all its streams) is written with a single write. If your next poll may be delayed, call `grpc_server_flush()`.
 - The TLS library never touches the socket: ciphertext is passed to and from it in memory, so each batch is encrypted with a single write call and every TLS library is driven the same way.
 
 ### Using more cores
@@ -59,22 +59,22 @@ A single HTTP/2 connection always stays on one loop, so multiple loops only help
 
 ### Logging
 
-Set the initial threshold and optional output stream in `ezgrpc2_config`, then
-change the threshold at runtime with `ezgrpc2_server_set_log_level()`:
+Set the initial threshold and optional output stream in `grpc_config`, then
+change the threshold at runtime with `grpc_server_set_log_level()`:
 
 ```c
-ezgrpc2_config cfg = {
+grpc_config cfg = {
     .port = 50051,
-    .log_level = EZGRPC2_LOG_WARNING,
+    .log_level = GRPC_LOG_WARNING,
     .log_file = stderr,
 };
-ezgrpc2_server *server = ezgrpc2_server_new(&cfg);
+grpc_server *server = grpc_server_new(&cfg);
 /* Later, from any thread while the server is alive: */
-ezgrpc2_server_set_log_level(server, EZGRPC2_LOG_DEBUG);
+grpc_server_set_log_level(server, GRPC_LOG_DEBUG);
 ```
 
-Each server has its own threshold and output stream. `EZGRPC2_LOG_DEFAULT`
-selects info; `EZGRPC2_LOG_OFF` disables server logs. Logging uses the vendored
+Each server has its own threshold and output stream. `GRPC_LOG_DEFAULT`
+selects info; `GRPC_LOG_OFF` disables server logs. Logging uses the vendored
 [ulog](https://github.com/thirdLetterC/ulog) backend.
 
 ### Performance
@@ -130,7 +130,7 @@ The sources are laid out as:
 
 | Directory | Contents |
 |:---|:---|
-| `include/` | All headers. Applications include `ezgrpc2.h` |
+| `include/` | All headers. Applications include `grpc.h` |
 | `src/` | Library sources (`.c`) |
 | `src/tests/` | Unit tests |
 | `examples/` | Example servers and the Python integration tests |
@@ -148,24 +148,24 @@ Run the registered unit and integration tests with:
 ctest --test-dir build --output-on-failure
 ```
 
-The CMake targets are `ezgrpc2_static` and `ezgrpc2_shared`. The `ezgrpc2::ezgrpc2` alias selects the static library and carries its required link dependencies.
+The CMake targets are `grpc_static` and `grpc_shared`. The `grpc::grpc` alias selects the static library and carries its required link dependencies.
 
 ### Compression
 
-The previous implementation provided gzip helpers only. Gzip and deflate both use zlib; deflate uses the zlib-wrapped DEFLATE stream used by gRPC. Zstandard (`zstd`) and Snappy (`snappy`) are detected at build time when their development libraries are installed. Set `-DEZGRPC2_ZSTD=OFF` or `-DEZGRPC2_SNAPPY=OFF` to disable either optional codec.
+The previous implementation provided gzip helpers only. Gzip and deflate both use zlib; deflate uses the zlib-wrapped DEFLATE stream used by gRPC. Zstandard (`zstd`) and Snappy (`snappy`) are detected at build time when their development libraries are installed. Set `-DGRPC_ZSTD=OFF` or `-DGRPC_SNAPPY=OFF` to disable either optional codec.
 
 Compression remains explicit and per message. The server sends the corresponding `grpc-encoding` header when the first response message is compressed, and advertises the codecs enabled in that build. For example:
 
 ```c
-ezgrpc2_message *response = ezgrpc2_message_new(payload, payload_len);
-ezgrpc2_message *compressed = ezgrpc2_message_compress(
-    response, EZGRPC2_COMPRESS_ZSTD, 5);  // Zstandard level 5
-ezgrpc2_message_free(response);
+grpc_message *response = grpc_message_new(payload, payload_len);
+grpc_message *compressed = grpc_message_compress(
+    response, GRPC_COMPRESS_ZSTD, 5);  // Zstandard level 5
+grpc_message_free(response);
 if (compressed != nullptr)
-    ezgrpc2_call_send(call, compressed);   // call_send takes ownership
+    grpc_call_send(call, compressed);   // call_send takes ownership
 ```
 
-Use `EZGRPC2_COMPRESS_GZIP` or `EZGRPC2_COMPRESS_DEFLATE` with zlib levels `0` through `9`; use `EZGRPC2_COMPRESSION_LEVEL_DEFAULT` for the library default. Zstandard accepts levels supported by the installed Zstandard library. Snappy has no level control and requires `EZGRPC2_COMPRESSION_LEVEL_DEFAULT`. The legacy `ezgrpc2_message_compress_gzip()` and raw gzip functions remain available.
+Use `GRPC_COMPRESS_GZIP` or `GRPC_COMPRESS_DEFLATE` with zlib levels `0` through `9`; use `GRPC_COMPRESSION_LEVEL_DEFAULT` for the library default. Zstandard accepts levels supported by the installed Zstandard library. Snappy has no level control and requires `GRPC_COMPRESSION_LEVEL_DEFAULT`. The legacy `grpc_message_compress_gzip()` and raw gzip functions remain available.
 
 Zstandard and Snappy are library-specific gRPC encodings. A peer must support the same encoding token to interoperate; standard gRPC implementations commonly support gzip and identity, while support for deflate, Zstandard and Snappy varies.
 
@@ -176,27 +176,27 @@ Add `-lprotobuf-c` when the Protobuf-C helpers are built, `-lflatccrt` when the 
 | CMake setting or command | Description |
 |:---|:---|
 | `cmake --build build --target check` | Builds and runs registered unit and integration tests |
-| `-DEZGRPC2_ALLOCATOR=mimalloc` | Uses `mimalloc`; also accepts `jemalloc` or `default` |
-| `-DEZGRPC2_TLS_BACKEND=<backend>` | Selects `AUTO`, `openssl`, `libressl`, `boringssl`, `awslc`, `wolfssl`, `gnutls`, `rustls` or `none` |
-| `-DEZGRPC2_TLS_PREFIX=<dir>` | Searches `<dir>` for the selected TLS library |
-| `-DEZGRPC2_PROTOBUF_C=OFF` | Disables Protobuf-C helpers; `AUTO` detects them, `ON` requires them |
-| `-DEZGRPC2_FLATCC=OFF` | Disables FlatBuffers helpers; `AUTO` detects them, `ON` requires them |
-| `-DEZGRPC2_FLATCC_PREFIX=<dir>` | Searches `<dir>/bin`, `include` and `lib` for flatcc |
-| `-DEZGRPC2_ZLIB=OFF`, `-DEZGRPC2_ZSTD=OFF`, `-DEZGRPC2_SNAPPY=OFF` | Disable optional codecs; each accepts `AUTO`, `ON` or `OFF` |
-| `-DEZGRPC2_DEBUG_LOGS=ON` | Enables debug logging and debug symbols |
-| `-DEZGRPC2_TRACE=ON` | Enables trace logging of every HTTP/2 frame |
-| `-DEZGRPC2_ASAN=ON` | Builds with AddressSanitizer |
-| `-DEZGRPC2_BUILD_INTEGRATION_TESTS=OFF` | Skips Python client integration tests |
-| `-DEZGRPC2_BUILD_EXAMPLES=OFF` | Skips example server targets |
+| `-DGRPC_ALLOCATOR=mimalloc` | Uses `mimalloc`; also accepts `jemalloc` or `default` |
+| `-DGRPC_TLS_BACKEND=<backend>` | Selects `AUTO`, `openssl`, `libressl`, `boringssl`, `awslc`, `wolfssl`, `gnutls`, `rustls` or `none` |
+| `-DGRPC_TLS_PREFIX=<dir>` | Searches `<dir>` for the selected TLS library |
+| `-DGRPC_PROTOBUF_C=OFF` | Disables Protobuf-C helpers; `AUTO` detects them, `ON` requires them |
+| `-DGRPC_FLATCC=OFF` | Disables FlatBuffers helpers; `AUTO` detects them, `ON` requires them |
+| `-DGRPC_FLATCC_PREFIX=<dir>` | Searches `<dir>/bin`, `include` and `lib` for flatcc |
+| `-DGRPC_ZLIB=OFF`, `-DGRPC_ZSTD=OFF`, `-DGRPC_SNAPPY=OFF` | Disable optional codecs; each accepts `AUTO`, `ON` or `OFF` |
+| `-DGRPC_DEBUG_LOGS=ON` | Enables debug logging and debug symbols |
+| `-DGRPC_TRACE=ON` | Enables trace logging of every HTTP/2 frame |
+| `-DGRPC_ASAN=ON` | Builds with AddressSanitizer |
+| `-DGRPC_BUILD_INTEGRATION_TESTS=OFF` | Skips Python client integration tests |
+| `-DGRPC_BUILD_EXAMPLES=OFF` | Skips example server targets |
 | `cmake --build build --target format` | Formats C sources with `clang-format` |
 | `cmake --build build --target format-check` | Checks C formatting with `clang-format` |
 | `cmake --build build --target clean` | Removes build output |
 
 ### TLS backends
 
-Exactly one TLS library is compiled in, selected with `EZGRPC2_TLS_BACKEND`. Use a separate build directory when switching backends. The versions listed are the ones the test suite has been run against.
+Exactly one TLS library is compiled in, selected with `GRPC_TLS_BACKEND`. Use a separate build directory when switching backends. The versions listed are the ones the test suite has been run against.
 
-| `EZGRPC2_TLS_BACKEND` | Library | How to get it | Notes |
+| `GRPC_TLS_BACKEND` | Library | How to get it | Notes |
 |:---|:---|:---|:---|
 | `openssl` | OpenSSL 3.0 | `libssl-dev` | Default when installed |
 | `libressl` | LibreSSL 4.3 | `scripts/build-tls-backend.sh libressl <dir>` | |
@@ -211,13 +211,13 @@ LibreSSL, BoringSSL and AWS-LC install the same `openssl/*.h` headers as OpenSSL
 
 ```bash
 scripts/build-tls-backend.sh awslc "$HOME/tls/awslc"
-cmake -S . -B build-awslc -DEZGRPC2_TLS_BACKEND=awslc -DEZGRPC2_TLS_PREFIX="$HOME/tls/awslc"
+cmake -S . -B build-awslc -DGRPC_TLS_BACKEND=awslc -DGRPC_TLS_PREFIX="$HOME/tls/awslc"
 cmake --build build-awslc --parallel
 ```
 
-The build fails if the headers it finds don't belong to the selected library, and the TLS unit test checks that the library linked in is the one requested. At runtime, `ezgrpc2_tls_backend()` and `ezgrpc2_tls_backend_version()` report the library in use.
+The build fails if the headers it finds don't belong to the selected library, and the TLS unit test checks that the library linked in is the one requested. At runtime, `grpc_tls_backend()` and `grpc_tls_backend_version()` report the library in use.
 
-All backends behave the same way: they load a PEM certificate chain and private key, check that the key matches the certificate, allow TLS 1.2 and 1.3 only, and select `h2` with ALPN. A client that offers no ALPN still connects. For settings ezgrpc2 doesn't expose, `ezgrpc2_tls_ctx_native()` returns the library's own context (`SSL_CTX *`, `WOLFSSL_CTX *`, `gnutls_certificate_credentials_t` or `const struct rustls_server_config *`).
+All backends behave the same way: they load a PEM certificate chain and private key, check that the key matches the certificate, allow TLS 1.2 and 1.3 only, and select `h2` with ALPN. A client that offers no ALPN still connects. For settings grpc doesn't expose, `grpc_tls_ctx_native()` returns the library's own context (`SSL_CTX *`, `WOLFSSL_CTX *`, `gnutls_certificate_credentials_t` or `const struct rustls_server_config *`).
 
 ---
 
@@ -228,34 +228,34 @@ All backends behave the same way: they load a PEM certificate chain and private 
 ```c
 #include <stdio.h>
 #include <string.h>
-#include "ezgrpc2.h"
+#include "grpc.h"
 
-static void handle_message(ezgrpc2_server *server, ezgrpc2_event *event) {
+static void handle_message(grpc_server *server, grpc_event *event) {
   /* the request messages; this server ignores their content */
-  ezgrpc2_message *request;
-  while ((request = ezgrpc2_messages_pop(event->message.messages)) != nullptr)
-    ezgrpc2_message_free(request);
+  grpc_message *request;
+  while ((request = grpc_messages_pop(event->message.messages)) != nullptr)
+    grpc_message_free(request);
 
   /* a unary call answers once the client has finished sending */
   if (!event->message.end_stream)
     return;
 
-  const char reply[] = "Hello from ezgrpc2!";
-  ezgrpc2_messages *response = ezgrpc2_messages_new(nullptr);
-  ezgrpc2_messages_push(response, ezgrpc2_message_new(0, (void *)reply, strlen(reply)));
+  const char reply[] = "Hello from grpc!";
+  grpc_messages *response = grpc_messages_new(nullptr);
+  grpc_messages_push(response, grpc_message_new(0, (void *)reply, strlen(reply)));
 
   /* both calls only queue frames; the next poll writes them */
-  ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id,
+  grpc_server_session_stream_send(server, event->session_uuid, event->message.stream_id,
                                      response);
-  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                    EZGRPC2_GRPC_STATUS_OK);
-  ezgrpc2_messages_free(response);
+  grpc_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                    GRPC_GRPC_STATUS_OK);
+  grpc_messages_free(response);
 }
 
 int main(void) {
-  ezgrpc2_global_init(0);
+  grpc_global_init(0);
 
-  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19009, /* IPv4 */
+  grpc_server *server = grpc_server_new("0.0.0.0", 19009, /* IPv4 */
                                               "::", 19009,      /* IPv6 */
                                               1024,             /* listen backlog */
                                               nullptr,          /* server settings */
@@ -264,48 +264,48 @@ int main(void) {
     return 1;
 
   /* optional */
-  /* ezgrpc2_server_enable_tls(server, "server.crt", "server.key"); */
-  ezgrpc2_health_register(server);
-  ezgrpc2_reflection_register(server);
+  /* grpc_server_enable_tls(server, "server.crt", "server.key"); */
+  grpc_health_register(server);
+  grpc_reflection_register(server);
 
   /* the userdata pointer comes back in every event for this path */
   static int say_hello;
-  ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHello", &say_hello, 0, 0);
+  grpc_server_register_path(server, "/helloworld.Greeter/SayHello", &say_hello, 0, 0);
 
-  ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
+  grpc_events *events = grpc_events_new(nullptr);
   for (;;) {
     /* writes queued responses, then waits up to 500 ms for new events */
-    if (ezgrpc2_server_poll(server, events, 500) < 0)
+    if (grpc_server_poll(server, events, 500) < 0)
       break;
 
     /* events come in blocks; read until none are left */
-    ezgrpc2_event *block;
+    grpc_event *block;
     size_t count;
-    while ((block = ezgrpc2_events_read(events, &count)) != nullptr) {
+    while ((block = grpc_events_read(events, &count)) != nullptr) {
       for (size_t i = 0; i < count; i++) {
-        ezgrpc2_event *event = &block[i];
-        if (ezgrpc2_health_handle_event(server, event) ||
-            ezgrpc2_reflection_handle_event(server, event)) {
+        grpc_event *event = &block[i];
+        if (grpc_health_handle_event(server, event) ||
+            grpc_reflection_handle_event(server, event)) {
           /* answered by the built-in services */
-        } else if (event->type == EZGRPC2_EVENT_MESSAGE && event->userdata == &say_hello) {
+        } else if (event->type == GRPC_EVENT_MESSAGE && event->userdata == &say_hello) {
           handle_message(server, event);
-        } else if (event->type == EZGRPC2_EVENT_DATALOSS) {
-          ezgrpc2_server_session_stream_end(server, event->session_uuid,
+        } else if (event->type == GRPC_EVENT_DATALOSS) {
+          grpc_server_session_stream_end(server, event->session_uuid,
                                             event->dataloss.stream_id,
-                                            EZGRPC2_GRPC_STATUS_DATA_LOSS);
+                                            GRPC_GRPC_STATUS_DATA_LOSS);
         }
 
         /* the application owns the received messages */
-        if (event->type == EZGRPC2_EVENT_MESSAGE)
-          ezgrpc2_messages_free(event->message.messages);
+        if (event->type == GRPC_EVENT_MESSAGE)
+          grpc_messages_free(event->message.messages);
       }
-      ezgrpc2_free(block);
+      grpc_free(block);
     }
   }
 
-  ezgrpc2_events_free(events);
-  ezgrpc2_server_free(server);
-  ezgrpc2_global_cleanup();
+  grpc_events_free(events);
+  grpc_server_free(server);
+  grpc_global_cleanup();
   return 0;
 }
 ```
@@ -319,21 +319,21 @@ With `protobuf-c` installed, unpack requests and pack responses directly:
 ```c
 #include "helloworld.pb-c.h"
 
-ezgrpc2_message *req_msg = ezgrpc2_messages_pop(event->message.messages);
-Helloworld__HelloRequest *req = EZGRPC2_PB_UNPACK(
+grpc_message *req_msg = grpc_messages_pop(event->message.messages);
+Helloworld__HelloRequest *req = GRPC_PB_UNPACK(
     Helloworld__HelloRequest, &helloworld__hello_request__descriptor, req_msg);
-ezgrpc2_message_free(req_msg);
+grpc_message_free(req_msg);
 
 Helloworld__HelloReply reply = HELLOWORLD__HELLO_REPLY__INIT;
 reply.message = "Hello, world!";
-ezgrpc2_messages *res_msgs = ezgrpc2_pb_create_response((ProtobufCMessage *)&reply);
+grpc_messages *res_msgs = grpc_pb_create_response((ProtobufCMessage *)&reply);
 
-ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
-ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                  EZGRPC2_GRPC_STATUS_OK);
+grpc_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
+grpc_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                  GRPC_GRPC_STATUS_OK);
 
-ezgrpc2_messages_free(res_msgs);
-EZGRPC2_PB_FREE_UNPACKED(req);
+grpc_messages_free(res_msgs);
+GRPC_PB_FREE_UNPACKED(req);
 ```
 
 ### 3. FlatBuffers requests and responses
@@ -345,14 +345,14 @@ With [flatcc](https://github.com/dvidelabs/flatcc), generate C code for a schema
 #include "greeter_verifier.h"
 
 flatcc_builder_t builder;
-ezgrpc2_fb_builder_init(&builder); /* once; uses the ezgrpc2 allocator */
+grpc_fb_builder_init(&builder); /* once; uses the grpc allocator */
 
 /* verifies the buffer and returns its root table, or nullptr if it is not a
  * valid greeter.HelloRequest. The table points into req_msg: keep it alive */
-greeter_HelloRequest_table_t req = EZGRPC2_FB_UNPACK(greeter_HelloRequest, req_msg);
+greeter_HelloRequest_table_t req = GRPC_FB_UNPACK(greeter_HelloRequest, req_msg);
 if (req == nullptr) {
-  ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
-                                     EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT, nullptr, nullptr, 0);
+  grpc_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
+                                     GRPC_GRPC_STATUS_INVALID_ARGUMENT, nullptr, nullptr, 0);
   return;
 }
 
@@ -363,14 +363,14 @@ greeter_HelloReply_message_create_str(&builder, name != nullptr ? name : "World"
 greeter_HelloReply_end_as_root(&builder);
 
 /* copies the finished buffer into a message and resets the builder for reuse */
-ezgrpc2_messages *res_msgs = ezgrpc2_fb_create_response(&builder);
-ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
-ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                  EZGRPC2_GRPC_STATUS_OK);
-ezgrpc2_messages_free(res_msgs);
+grpc_messages *res_msgs = grpc_fb_create_response(&builder);
+grpc_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
+grpc_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                  GRPC_GRPC_STATUS_OK);
+grpc_messages_free(res_msgs);
 ```
 
-FlatBuffers services use the usual gRPC paths (`/greeter.Greeter/SayHello` for `rpc_service Greeter` in `namespace greeter`). flatcc requires `attribute "streaming";` in schemas that mark streaming methods. Message payloads (`ezgrpc2_message.data`) are aligned like `malloc()` memory, so buffers can be read where they are received.
+FlatBuffers services use the usual gRPC paths (`/greeter.Greeter/SayHello` for `rpc_service Greeter` in `namespace greeter`). flatcc requires `attribute "streaming";` in schemas that mark streaming methods. Message payloads (`grpc_message.data`) are aligned like `malloc()` memory, so buffers can be read where they are received.
 
 ### 4. Metadata, trailers and rich errors
 
@@ -378,28 +378,28 @@ Read a request header and end the stream with custom trailers:
 
 ```c
 size_t len;
-const char *agent = ezgrpc2_metadata_get(server, event->session_uuid, event->message.stream_id,
+const char *agent = grpc_metadata_get(server, event->session_uuid, event->message.stream_id,
                                          "user-agent", &len);
 
-ezgrpc2_metadata_entry trailers[] = {
+grpc_metadata_entry trailers[] = {
     {.key = "x-custom-reply", .value = "pong", .key_len = 14, .value_len = 4},
 };
-ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
-                                   EZGRPC2_GRPC_STATUS_OK, nullptr, trailers, 1);
+grpc_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
+                                   GRPC_GRPC_STATUS_OK, nullptr, trailers, 1);
 ```
 
 Return an error with `google.rpc.Status` details, serialized into `grpc-status-details-bin`:
 
 ```c
-ezgrpc2_status_detail_entry detail = {
+grpc_status_detail_entry detail = {
     .type_url = "type.googleapis.com/google.rpc.ErrorInfo",
     .value = error_info_bytes, /* a serialized google.rpc.ErrorInfo */
     .value_len = error_info_len,
 };
 
-ezgrpc2_server_session_stream_end_with_status_details(
+grpc_server_session_stream_end_with_status_details(
     server, event->session_uuid, event->message.stream_id,
-    EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT, "Invalid name provided",
+    GRPC_GRPC_STATUS_INVALID_ARGUMENT, "Invalid name provided",
     &detail, 1,     /* details */
     nullptr, 0);    /* extra trailers */
 ```
@@ -411,11 +411,11 @@ static bool validate_token(const char *token, void *user_data) {
   return strcmp(token, "secret") == 0;
 }
 
-ezgrpc2_interceptor auth = ezgrpc2_interceptor_create_bearer_auth(validate_token, nullptr);
-ezgrpc2_server_add_interceptor(server, &auth);
+grpc_interceptor auth = grpc_interceptor_create_bearer_auth(validate_token, nullptr);
+grpc_server_add_interceptor(server, &auth);
 
 /* in the event loop, before running a handler: */
-if (!ezgrpc2_server_intercept_pre(server, event, "SayHello"))
+if (!grpc_server_intercept_pre(server, event, "SayHello"))
   continue; /* the stream was already ended with UNAUTHENTICATED */
 ```
 
@@ -450,6 +450,6 @@ Every push and pull request is tested with GitHub Actions ([`.github/workflows/c
 - **OS**: Ubuntu 24.04 and Ubuntu 22.04
 - **Compilers**: GCC and Clang
 - **Allocators**: libc `malloc`, `mimalloc` and `jemalloc`
-- **Sanitizers**: AddressSanitizer builds (`EZGRPC2_ASAN=ON`)
+- **Sanitizers**: AddressSanitizer builds (`GRPC_ASAN=ON`)
 - **FlatBuffers**: flatcc built from source, with GCC, Clang and AddressSanitizer
 - **TLS backends**: LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls, in addition to OpenSSL

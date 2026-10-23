@@ -58,11 +58,11 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install grpcio grpcio-tools protobuf
 
-      - name: Build ezgrpc2 and examples
+      - name: Build grpc and examples
         run: |
           cmake -S . -B build \
             -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
-            -DEZGRPC2_ALLOCATOR=${{ matrix.allocator }}
+            -DGRPC_ALLOCATOR=${{ matrix.allocator }}
           cmake --build build --parallel 2
 
       - name: Run unit and integration tests
@@ -113,7 +113,7 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
-            -DEZGRPC2_ASAN=ON
+            -DGRPC_ASAN=ON
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
 
@@ -178,8 +178,8 @@ jobs:
       - name: Build and test
         run: |
           cmake -S . -B build \
-            -DEZGRPC2_TLS_BACKEND=${{ matrix.tls }} \
-            -DEZGRPC2_TLS_PREFIX="$TLS_PREFIX_DIR"
+            -DGRPC_TLS_BACKEND=${{ matrix.tls }} \
+            -DGRPC_TLS_PREFIX="$TLS_PREFIX_DIR"
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
 
@@ -246,8 +246,8 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_C_COMPILER=${{ matrix.compiler }} \
-            -DEZGRPC2_ASAN=${{ matrix.asan == '1' && 'ON' || 'OFF' }} \
-            -DEZGRPC2_FLATCC=ON \
-            -DEZGRPC2_FLATCC_PREFIX="$FLATCC_PREFIX_DIR"
+            -DGRPC_ASAN=${{ matrix.asan == '1' && 'ON' || 'OFF' }} \
+            -DGRPC_FLATCC=ON \
+            -DGRPC_FLATCC_PREFIX="$FLATCC_PREFIX_DIR"
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure

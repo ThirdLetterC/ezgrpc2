@@ -9,7 +9,7 @@
 #include <strings.h>
 #include <stdio.h>
 #include "core.h"
-#include "ezgrpc2_header.h"
+#include "grpc_header.h"
 #include "internal_nghttp2_callbacks.h"
 #include "internal_helpers.h"
 #include "internal_tls.h"
@@ -23,8 +23,8 @@ int makenonblock(int sockfd) {
 }
 
 int list_cmp_ezheader_name(const void *data, const void *userdata) {
-  const ezgrpc2_header *a = data;
-  const ezgrpc2_header *b = userdata;
+  const grpc_header *a = data;
+  const grpc_header *b = userdata;
   return a->namelen == b->namelen ? strncasecmp(a->name, b->name, a->namelen) : 1;
 }
 
@@ -124,11 +124,11 @@ void ezflog(FILE *fp, const char *fmt, ...) {
 }
 
 /* stop pulling frames out of nghttp2 once this many bytes wait for the kernel */
-static const size_t EZGRPC2_OBUF_HIGH_WATER = 256 * 1024;
+static const size_t GRPC_OBUF_HIGH_WATER = 256 * 1024;
 
 static void on_session_close(uv_handle_t *handle) {
-  ezgrpc2_session *session = handle->data;
-  ezgrpc2_server *server = session->server;
+  grpc_session *session = handle->data;
+  grpc_server *server = session->server;
   size_t ndx = session->index;
 
   buf_free(&session->obuf);
@@ -145,7 +145,7 @@ static void on_session_close(uv_handle_t *handle) {
   server->free_sessions[server->nb_free_sessions++] = ndx;
 }
 
-void session_close(ezgrpc2_session *session) {
+void session_close(grpc_session *session) {
   if (session == nullptr || !session->is_active || session->is_closing) {
     return;
   }
@@ -156,12 +156,12 @@ void session_close(ezgrpc2_session *session) {
 
   /* before nghttp2_session_del(): the streams hold nghttp2 buffers that are
    * released through the session */
-  ezgrpc2_stream *ezstream;
+  grpc_stream *ezstream;
   while ((ezstream = session->streams) != nullptr) {
     stream_unlink(session, ezstream);
     /* the client is gone: its calls are cancelled */
     if (ezstream->call != nullptr)
-      call_detach(ezstream->call, EZGRPC2_STATUS_UNAVAILABLE);
+      call_detach(ezstream->call, GRPC_STATUS_UNAVAILABLE);
     stream_free(ezstream);
   }
 
@@ -174,13 +174,13 @@ void session_close(ezgrpc2_session *session) {
     /* best effort close_notify. skipped if it would overtake queued output */
     if (session->tls_handshake_done && !session->is_writing) {
       session->obuf.len = 0;
-      ezgrpc2_tls_close_notify(session);
-      if (!ezgrpc2_tls_drain(session, &session->obuf) && session->obuf.len > 0) {
+      grpc_tls_close_notify(session);
+      if (!grpc_tls_drain(session, &session->obuf) && session->obuf.len > 0) {
         uv_buf_t buf = uv_buf_init((char *)session->obuf.data, (unsigned int)session->obuf.len);
         (void)uv_try_write((uv_stream_t *)&session->tcp, &buf, 1);
       }
     }
-    ezgrpc2_tls_session_free(session);
+    grpc_tls_session_free(session);
     session->is_tls = false;
   }
 
@@ -189,27 +189,27 @@ void session_close(ezgrpc2_session *session) {
 }
 
 static void *nghttp2_mem_malloc(size_t size, [[maybe_unused]] void *user_data) {
-  return ezgrpc2_malloc(size);
+  return grpc_malloc(size);
 }
 
 static void nghttp2_mem_free(void *ptr, [[maybe_unused]] void *user_data) {
-  ezgrpc2_free(ptr);
+  grpc_free(ptr);
 }
 
 static void *nghttp2_mem_calloc(size_t nmemb, size_t size, [[maybe_unused]] void *user_data) {
-  return ezgrpc2_calloc(nmemb, size);
+  return grpc_calloc(nmemb, size);
 }
 
 static void *nghttp2_mem_realloc(void *ptr, size_t size, [[maybe_unused]] void *user_data) {
-  return ezgrpc2_realloc(ptr, size);
+  return grpc_realloc(ptr, size);
 }
 
 /* sets up TLS and nghttp2 for an accepted connection */
-static int session_create(ezgrpc2_session *ezsession) {
-  ezgrpc2_server *server = ezsession->server;
+static int session_create(grpc_session *ezsession) {
+  grpc_server *server = ezsession->server;
 
   /* TLS goes first so that a failure never leaves an announced session behind */
-  if (server->is_tls && ezgrpc2_tls_session_init(ezsession) != 0) {
+  if (server->is_tls && grpc_tls_session_init(ezsession) != 0) {
     return 1;
   }
 
@@ -242,7 +242,7 @@ static int session_create(ezgrpc2_session *ezsession) {
   return 0;
 }
 
-static void session_set_peer(ezgrpc2_session *ezsession) {
+static void session_set_peer(grpc_session *ezsession) {
   int namelen = sizeof(ezsession->sockaddr);
   if (uv_tcp_getpeername(&ezsession->tcp, (struct sockaddr *)&ezsession->sockaddr, &namelen) != 0) {
     return;
@@ -267,11 +267,11 @@ static void session_set_peer(ezgrpc2_session *ezsession) {
 
 static void on_session_alloc(uv_handle_t *handle, [[maybe_unused]] size_t suggested_size,
                              uv_buf_t *buf) {
-  ezgrpc2_server *server = ((ezgrpc2_session *)handle->data)->server;
+  grpc_server *server = ((grpc_session *)handle->data)->server;
   *buf = uv_buf_init((char *)server->rbuf, (unsigned int)server->rbuf_len);
 }
 
-static int session_recv(ezgrpc2_session *ezsession, const u8 *data, size_t len) {
+static int session_recv(grpc_session *ezsession, const u8 *data, size_t len) {
   ssize_t res = nghttp2_session_mem_recv(ezsession->ngsession, data, len);
   if (res < 0) {
     LOG_ERROR(ezsession->server, "@ %s: nghttp2: %s. killing...\n", __func__,
@@ -281,14 +281,14 @@ static int session_recv(ezgrpc2_session *ezsession, const u8 *data, size_t len) 
   return 0;
 }
 
-static int session_recv_tls(ezgrpc2_session *ezsession, const u8 *data, size_t len) {
-  ezgrpc2_server *server = ezsession->server;
-  if (ezgrpc2_tls_feed(ezsession, data, len)) {
+static int session_recv_tls(grpc_session *ezsession, const u8 *data, size_t len) {
+  grpc_server *server = ezsession->server;
+  if (grpc_tls_feed(ezsession, data, len)) {
     return 1;
   }
 
   if (!ezsession->tls_handshake_done) {
-    int hres = ezgrpc2_tls_handshake(ezsession);
+    int hres = grpc_tls_handshake(ezsession);
     if (hres < 0) {
       LOG_ERROR(server, "TLS handshake failed on session %p\n", (void *)ezsession);
       return 1;
@@ -300,7 +300,7 @@ static int session_recv_tls(ezgrpc2_session *ezsession, const u8 *data, size_t l
 
   /* the ciphertext now lives in the read BIO, so the read buffer can hold the plaintext */
   for (;;) {
-    ssize_t n = ezgrpc2_tls_read(ezsession, server->rbuf, server->rbuf_len);
+    ssize_t n = grpc_tls_read(ezsession, server->rbuf, server->rbuf_len);
     if (n == -2) {
       return 0;
     }
@@ -314,7 +314,7 @@ static int session_recv_tls(ezgrpc2_session *ezsession, const u8 *data, size_t l
 }
 
 static void on_session_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
-  ezgrpc2_session *ezsession = stream->data;
+  grpc_session *ezsession = stream->data;
   if (nread == 0 || !ezsession->is_active || ezsession->is_closing) {
     return;
   }
@@ -340,17 +340,17 @@ static void on_session_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *
 }
 
 static void on_reject_close(uv_handle_t *handle) {
-  ezgrpc2_free(handle);
+  grpc_free(handle);
 }
 
 /* libuv stops accepting until the pending connection is taken, so take it and drop it */
-static void reject_connection(ezgrpc2_server *server, uv_stream_t *listener) {
-  uv_tcp_t *tcp = ezgrpc2_malloc(sizeof(*tcp));
+static void reject_connection(grpc_server *server, uv_stream_t *listener) {
+  uv_tcp_t *tcp = grpc_malloc(sizeof(*tcp));
   if (tcp == nullptr) {
     return;
   }
   if (uv_tcp_init(&server->loop, tcp) != 0) {
-    ezgrpc2_free(tcp);
+    grpc_free(tcp);
     return;
   }
   (void)uv_accept(listener, (uv_stream_t *)tcp);
@@ -358,7 +358,7 @@ static void reject_connection(ezgrpc2_server *server, uv_stream_t *listener) {
 }
 
 void on_listener_connection(uv_stream_t *listener, int status) {
-  ezgrpc2_server *server = listener->data;
+  grpc_server *server = listener->data;
   if (status < 0) {
     LOG_ERROR(server, "accept: %s\n", uv_strerror(status));
     return;
@@ -372,7 +372,7 @@ void on_listener_connection(uv_stream_t *listener, int status) {
   }
 
   size_t ndx = server->free_sessions[server->nb_free_sessions - 1];
-  ezgrpc2_session *session = &server->sessions[ndx];
+  grpc_session *session = &server->sessions[ndx];
   if (uv_tcp_init(&server->loop, &session->tcp) != 0) {
     reject_connection(server, listener);
     return;
@@ -415,7 +415,7 @@ void on_listener_connection(uv_stream_t *listener, int status) {
   session_schedule_flush(session);
 }
 
-void session_schedule_flush(ezgrpc2_session *session) {
+void session_schedule_flush(grpc_session *session) {
   if (session->is_flush_queued)
     return;
   session->is_flush_queued = true;
@@ -423,8 +423,8 @@ void session_schedule_flush(ezgrpc2_session *session) {
   session->server->flush_head = session;
 }
 
-void server_flush_sessions(ezgrpc2_server *server) {
-  ezgrpc2_session *session;
+void server_flush_sessions(grpc_server *server) {
+  grpc_session *session;
   while ((session = server->flush_head) != nullptr) {
     server->flush_head = session->flush_next;
     session->flush_next = nullptr;
@@ -434,12 +434,12 @@ void server_flush_sessions(ezgrpc2_server *server) {
 }
 
 /* moves the frames queued in nghttp2 into obuf, encrypting them if needed */
-static int session_serialize(ezgrpc2_session *ezsession) {
+static int session_serialize(grpc_session *ezsession) {
   /* TLS application data cannot be written before the handshake completes */
   bool can_send = !ezsession->is_tls || ezsession->tls_handshake_done;
-  ezgrpc2_buf *out = ezsession->is_tls ? &ezsession->server->tls_obuf : &ezsession->obuf;
+  grpc_buf *out = ezsession->is_tls ? &ezsession->server->tls_obuf : &ezsession->obuf;
 
-  while (can_send && ezsession->obuf.len + out->len < EZGRPC2_OBUF_HIGH_WATER) {
+  while (can_send && ezsession->obuf.len + out->len < GRPC_OBUF_HIGH_WATER) {
     const u8 *data;
     ssize_t n = nghttp2_session_mem_send(ezsession->ngsession, &data);
     if (n < 0) {
@@ -455,19 +455,19 @@ static int session_serialize(ezgrpc2_session *ezsession) {
   if (ezsession->is_tls) {
     /* one SSL_write for the whole batch keeps the records large */
     if (out->len > 0) {
-      ssize_t n = ezgrpc2_tls_write(ezsession, out->data, out->len);
+      ssize_t n = grpc_tls_write(ezsession, out->data, out->len);
       out->len = 0;
       if (n <= 0)
         return 1;
     }
-    if (ezgrpc2_tls_drain(ezsession, &ezsession->obuf))
+    if (grpc_tls_drain(ezsession, &ezsession->obuf))
       return 1;
   }
   return 0;
 }
 
 static void on_session_write(uv_write_t *req, int status) {
-  ezgrpc2_session *ezsession = req->data;
+  grpc_session *ezsession = req->data;
   ezsession->is_writing = false;
   ezsession->wbuf.len = 0;
   if (!ezsession->is_active || ezsession->is_closing)
@@ -480,7 +480,7 @@ static void on_session_write(uv_write_t *req, int status) {
   session_flush(ezsession);
 }
 
-void session_flush(ezgrpc2_session *ezsession) {
+void session_flush(grpc_session *ezsession) {
   /* an in-flight write resumes the flush from on_session_write */
   if (!ezsession->is_active || ezsession->is_closing || ezsession->is_writing)
     return;
@@ -508,7 +508,7 @@ void session_flush(ezgrpc2_session *ezsession) {
     }
 
     /* the socket buffer is full. let libuv write the rest while obuf keeps collecting */
-    ezgrpc2_buf tmp = ezsession->wbuf;
+    grpc_buf tmp = ezsession->wbuf;
     ezsession->wbuf = ezsession->obuf;
     ezsession->obuf = tmp;
     ezsession->obuf.len = 0;
@@ -529,38 +529,38 @@ void session_flush(ezgrpc2_session *ezsession) {
     session_close(ezsession);
 }
 
-ezgrpc2_stream *stream_new(i32 stream_id) {
-  ezgrpc2_stream *ezstream = ezgrpc2_calloc(1, sizeof(*ezstream));
+grpc_stream *stream_new(i32 stream_id) {
+  grpc_stream *ezstream = grpc_calloc(1, sizeof(*ezstream));
   if (ezstream == nullptr)
     return nullptr;
   ezstream->stream_id = stream_id;
   ezstream->recv_data = ezstream->recv_inline;
   ezstream->recv_cap = sizeof(ezstream->recv_inline);
-  ezgrpc2_list_init(&ezstream->lqueue_omessages);
+  grpc_list_init(&ezstream->lqueue_omessages);
   return ezstream;
 }
 
-void stream_free(ezgrpc2_stream *ezstream) {
+void stream_free(grpc_stream *ezstream) {
   if (ezstream == nullptr)
     return;
   if (ezstream->recv_data != ezstream->recv_inline)
-    ezgrpc2_free(ezstream->recv_data);
-  ezgrpc2_free(ezstream->pending_trailers);
+    grpc_free(ezstream->recv_data);
+  grpc_free(ezstream->pending_trailers);
 
   for (size_t i = 0; i < ezstream->nb_headers; i++) {
     nghttp2_rcbuf_decref(ezstream->header_rcbufs[i][0]);
     nghttp2_rcbuf_decref(ezstream->header_rcbufs[i][1]);
   }
 
-  ezgrpc2_message *msg;
-  while ((msg = ezgrpc2_list_pop_front(&ezstream->lqueue_omessages)) != nullptr) {
-    ezgrpc2_message_free(msg);
+  grpc_message *msg;
+  while ((msg = grpc_list_pop_front(&ezstream->lqueue_omessages)) != nullptr) {
+    grpc_message_free(msg);
   }
 
-  ezgrpc2_free(ezstream);
+  grpc_free(ezstream);
 }
 
-void stream_link(ezgrpc2_session *session, ezgrpc2_stream *stream) {
+void stream_link(grpc_session *session, grpc_stream *stream) {
   stream->prev = nullptr;
   stream->next = session->streams;
   if (session->streams != nullptr)
@@ -569,7 +569,7 @@ void stream_link(ezgrpc2_session *session, ezgrpc2_stream *stream) {
   session->nb_streams++;
 }
 
-void stream_unlink(ezgrpc2_session *session, ezgrpc2_stream *stream) {
+void stream_unlink(grpc_session *session, grpc_stream *stream) {
   if (stream->prev != nullptr)
     stream->prev->next = stream->next;
   else

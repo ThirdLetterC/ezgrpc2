@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#define EZGRPC2_NO_ALLOC_OVERRIDE
-#include "ezgrpc2_mem.h"
+#define GRPC_NO_ALLOC_OVERRIDE
+#include "grpc_mem.h"
 #include "unity.h"
 
 void setUp(void) {}
@@ -11,11 +11,11 @@ void setUp(void) {}
 void tearDown(void) {}
 
 void test_allocator_name(void) {
-  const char *name = ezgrpc2_get_allocator_name();
+  const char *name = grpc_get_allocator_name();
   TEST_ASSERT_NOT_NULL(name);
-#if defined(EZGRPC2_USE_MIMALLOC)
+#if defined(GRPC_USE_MIMALLOC)
   TEST_ASSERT_EQUAL_STRING("mimalloc", name);
-#elif defined(EZGRPC2_USE_JEMALLOC)
+#elif defined(GRPC_USE_JEMALLOC)
   TEST_ASSERT_EQUAL_STRING("jemalloc", name);
 #else
   TEST_ASSERT_EQUAL_STRING("libc", name);
@@ -23,92 +23,92 @@ void test_allocator_name(void) {
 }
 
 void test_allocator_basic_operations(void) {
-  // Test ezgrpc2_malloc & ezgrpc2_free
-  void *p1 = ezgrpc2_malloc(128);
+  // Test grpc_malloc & grpc_free
+  void *p1 = grpc_malloc(128);
   TEST_ASSERT_NOT_NULL(p1);
   memset(p1, 0xAA, 128);
-  ezgrpc2_free(p1);
+  grpc_free(p1);
 
-  // Test ezgrpc2_calloc
-  int *p2 = (int *)ezgrpc2_calloc(16, sizeof(int));
+  // Test grpc_calloc
+  int *p2 = (int *)grpc_calloc(16, sizeof(int));
   TEST_ASSERT_NOT_NULL(p2);
   for (int i = 0; i < 16; i++) {
     TEST_ASSERT_EQUAL_INT(0, p2[i]);
   }
 
-  // Test ezgrpc2_realloc
-  p2 = (int *)ezgrpc2_realloc(p2, 32 * sizeof(int));
+  // Test grpc_realloc
+  p2 = (int *)grpc_realloc(p2, 32 * sizeof(int));
   TEST_ASSERT_NOT_NULL(p2);
   for (int i = 0; i < 16; i++) {
     TEST_ASSERT_EQUAL_INT(0, p2[i]);
   }
-  ezgrpc2_free(p2);
+  grpc_free(p2);
 
-  // Test ezgrpc2_strdup
-  char *str = ezgrpc2_strdup("hello ezgrpc2");
+  // Test grpc_strdup
+  char *str = grpc_strdup("hello grpc");
   TEST_ASSERT_NOT_NULL(str);
-  TEST_ASSERT_EQUAL_STRING("hello ezgrpc2", str);
-  ezgrpc2_free(str);
+  TEST_ASSERT_EQUAL_STRING("hello grpc", str);
+  grpc_free(str);
 
-  // Test ezgrpc2_strndup
-  char *nstr = ezgrpc2_strndup("hello ezgrpc2", 5);
+  // Test grpc_strndup
+  char *nstr = grpc_strndup("hello grpc", 5);
   TEST_ASSERT_NOT_NULL(nstr);
   TEST_ASSERT_EQUAL_STRING("hello", nstr);
-  ezgrpc2_free(nstr);
+  grpc_free(nstr);
 
-  // Test ezgrpc2_aligned_alloc (64 bytes aligned)
-  void *aligned = ezgrpc2_aligned_alloc(64, 256);
+  // Test grpc_aligned_alloc (64 bytes aligned)
+  void *aligned = grpc_aligned_alloc(64, 256);
   TEST_ASSERT_NOT_NULL(aligned);
   TEST_ASSERT_EQUAL_UINT64(0, (uintptr_t)aligned % 64);
-  ezgrpc2_free(aligned);
+  grpc_free(aligned);
 }
 
-#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
+#if defined(GRPC_USE_CUSTOM_ALLOCATOR)
 static size_t g_mock_malloc_count = 0;
 static size_t g_mock_free_count = 0;
 #endif
 
 static void *mock_malloc(size_t size) {
-#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
+#if defined(GRPC_USE_CUSTOM_ALLOCATOR)
   g_mock_malloc_count++;
 #endif
   return malloc(size);
 }
 
 static void mock_free(void *ptr) {
-#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
+#if defined(GRPC_USE_CUSTOM_ALLOCATOR)
   g_mock_free_count++;
 #endif
   free(ptr);
 }
 
 void test_custom_allocator_switch(void) {
-  const ezgrpc2_allocator *orig = ezgrpc2_get_allocator();
+  const grpc_allocator *orig = grpc_get_allocator();
   TEST_ASSERT_NOT_NULL(orig);
 
-  ezgrpc2_allocator mock_alloc = {
+  grpc_allocator mock_alloc = {
       .malloc = mock_malloc,
       .free = mock_free,
   };
 
-  ezgrpc2_set_allocator(&mock_alloc);
-  const ezgrpc2_allocator *current = ezgrpc2_get_allocator();
+  grpc_set_allocator(&mock_alloc);
+  const grpc_allocator *current = grpc_get_allocator();
   TEST_ASSERT_NOT_NULL(current);
   TEST_ASSERT_TRUE(current->malloc == mock_malloc);
   TEST_ASSERT_TRUE(current->free == mock_free);
 
-#if defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
+#if defined(GRPC_USE_CUSTOM_ALLOCATOR)
   g_mock_malloc_count = 0;
   g_mock_free_count = 0;
-  void *ptr = ezgrpc2_malloc(64);
+  void *ptr = grpc_malloc(64);
   TEST_ASSERT_NOT_NULL(ptr);
   TEST_ASSERT_EQUAL_UINT64(1, g_mock_malloc_count);
-  ezgrpc2_free(ptr);
+  grpc_free(ptr);
   TEST_ASSERT_EQUAL_UINT64(1, g_mock_free_count);
 #endif
 
   // Restore default
-  ezgrpc2_set_allocator(nullptr);
+  grpc_set_allocator(nullptr);
 }
 
 int main(void) {

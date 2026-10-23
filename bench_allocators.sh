@@ -18,9 +18,9 @@ run_test() {
   echo "============================================================"
 
   cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release \
-    -DEZGRPC2_ALLOCATOR="$allocator" \
-    -DEZGRPC2_BUILD_TESTS=OFF \
-    -DEZGRPC2_BUILD_INTEGRATION_TESTS=OFF >/dev/null
+    -DGRPC_ALLOCATOR="$allocator" \
+    -DGRPC_BUILD_TESTS=OFF \
+    -DGRPC_BUILD_INTEGRATION_TESTS=OFF >/dev/null
   cmake --build "$build_dir" --target example_grpc_server --parallel >/dev/null 2>&1
 
   "$build_dir/server.bin" $PORT 1 >/dev/null 2>&1 &

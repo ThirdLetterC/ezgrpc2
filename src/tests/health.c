@@ -1,63 +1,63 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ezgrpc2.h"
+#include "grpc.h"
 #include "unity.h"
 
 void setUp(void) {}
 void tearDown(void) {}
 
-static ezgrpc2_server *new_server(uint16_t port) {
-  return ezgrpc2_server_new(
-      &(ezgrpc2_config){.port = port, .ipv4_addr = "127.0.0.1", .log_level = EZGRPC2_LOG_OFF});
+static grpc_server *new_server(uint16_t port) {
+  return grpc_server_new(
+      &(grpc_config){.port = port, .ipv4_addr = "127.0.0.1", .log_level = GRPC_LOG_OFF});
 }
 
 void test_health_status_get_set(void) {
-  ezgrpc2_server *server = new_server(19999);
+  grpc_server *server = new_server(19999);
   TEST_ASSERT_NOT_NULL(server);
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_health_enable(server));
+  TEST_ASSERT_EQUAL_INT(GRPC_OK, grpc_health_enable(server));
 
   /* everything is SERVING until told otherwise */
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING, ezgrpc2_health_get_status(server, nullptr));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING, ezgrpc2_health_get_status(server, ""));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING, ezgrpc2_health_get_status(server, "any.Service"));
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_SERVING, grpc_health_get_status(server, nullptr));
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_SERVING, grpc_health_get_status(server, ""));
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_SERVING, grpc_health_get_status(server, "any.Service"));
 
-  ezgrpc2_health_set_status(server, nullptr, EZGRPC2_HEALTH_NOT_SERVING);
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_NOT_SERVING, ezgrpc2_health_get_status(server, nullptr));
+  grpc_health_set_status(server, nullptr, GRPC_HEALTH_NOT_SERVING);
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_NOT_SERVING, grpc_health_get_status(server, nullptr));
 
-  ezgrpc2_health_set_status(server, "helloworld.Greeter", EZGRPC2_HEALTH_SERVING);
-  ezgrpc2_health_set_status(server, "order.OrderService", EZGRPC2_HEALTH_NOT_SERVING);
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING,
-                        ezgrpc2_health_get_status(server, "helloworld.Greeter"));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_NOT_SERVING,
-                        ezgrpc2_health_get_status(server, "order.OrderService"));
-  ezgrpc2_health_set_status(server, "order.OrderService", EZGRPC2_HEALTH_SERVING);
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING,
-                        ezgrpc2_health_get_status(server, "order.OrderService"));
+  grpc_health_set_status(server, "helloworld.Greeter", GRPC_HEALTH_SERVING);
+  grpc_health_set_status(server, "order.OrderService", GRPC_HEALTH_NOT_SERVING);
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_SERVING,
+                        grpc_health_get_status(server, "helloworld.Greeter"));
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_NOT_SERVING,
+                        grpc_health_get_status(server, "order.OrderService"));
+  grpc_health_set_status(server, "order.OrderService", GRPC_HEALTH_SERVING);
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_SERVING,
+                        grpc_health_get_status(server, "order.OrderService"));
 
-  ezgrpc2_server_free(server);
+  grpc_server_free(server);
 }
 
 void test_health_is_per_server(void) {
-  ezgrpc2_server *a = new_server(19998);
-  ezgrpc2_server *b = new_server(19997);
+  grpc_server *a = new_server(19998);
+  grpc_server *b = new_server(19997);
   TEST_ASSERT_NOT_NULL(a);
   TEST_ASSERT_NOT_NULL(b);
-  ezgrpc2_health_set_status(a, nullptr, EZGRPC2_HEALTH_NOT_SERVING);
-  ezgrpc2_health_set_status(b, nullptr, EZGRPC2_HEALTH_SERVING);
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_NOT_SERVING, ezgrpc2_health_get_status(a, nullptr));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING, ezgrpc2_health_get_status(b, nullptr));
-  ezgrpc2_server_free(a);
-  ezgrpc2_server_free(b);
+  grpc_health_set_status(a, nullptr, GRPC_HEALTH_NOT_SERVING);
+  grpc_health_set_status(b, nullptr, GRPC_HEALTH_SERVING);
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_NOT_SERVING, grpc_health_get_status(a, nullptr));
+  TEST_ASSERT_EQUAL_INT(GRPC_HEALTH_SERVING, grpc_health_get_status(b, nullptr));
+  grpc_server_free(a);
+  grpc_server_free(b);
 }
 
 void test_health_enable_twice(void) {
-  ezgrpc2_server *server = new_server(19996);
+  grpc_server *server = new_server(19996);
   TEST_ASSERT_NOT_NULL(server);
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_health_enable(server));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_EXISTS, ezgrpc2_health_enable(server));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID, ezgrpc2_health_enable(nullptr));
-  ezgrpc2_server_free(server);
+  TEST_ASSERT_EQUAL_INT(GRPC_OK, grpc_health_enable(server));
+  TEST_ASSERT_EQUAL_INT(GRPC_ERR_EXISTS, grpc_health_enable(server));
+  TEST_ASSERT_EQUAL_INT(GRPC_ERR_INVALID, grpc_health_enable(nullptr));
+  grpc_server_free(server);
 }
 
 int main(void) {

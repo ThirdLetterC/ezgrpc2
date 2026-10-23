@@ -1,26 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ezgrpc2.h"
+#include "grpc.h"
 #include "unity.h"
 
 void setUp(void) {}
 void tearDown(void) {}
 
-static ezgrpc2_server *new_tls_server(const char *cert, const char *key) {
-  return ezgrpc2_server_new(&(ezgrpc2_config){
+static grpc_server *new_tls_server(const char *cert, const char *key) {
+  return grpc_server_new(&(grpc_config){
       .port = 19995,
       .ipv4_addr = "127.0.0.1",
       .tls = {.cert_file = cert, .key_file = key},
-      .log_level = EZGRPC2_LOG_OFF,
+      .log_level = GRPC_LOG_OFF,
   });
 }
 
 void test_tls_backend(void) {
   /* the library must be built with the backend the build asked for */
-  TEST_ASSERT_EQUAL_STRING(EXPECTED_TLS_BACKEND, ezgrpc2_tls_backend());
-  TEST_ASSERT_TRUE(strlen(ezgrpc2_tls_backend_version()) > 0);
-  printf("TLS backend: %s (%s)\n", ezgrpc2_tls_backend(), ezgrpc2_tls_backend_version());
+  TEST_ASSERT_EQUAL_STRING(EXPECTED_TLS_BACKEND, grpc_tls_backend());
+  TEST_ASSERT_TRUE(strlen(grpc_tls_backend_version()) > 0);
+  printf("TLS backend: %s (%s)\n", grpc_tls_backend(), grpc_tls_backend_version());
 }
 
 void test_tls_invalid_files(void) {
@@ -30,16 +30,16 @@ void test_tls_invalid_files(void) {
 }
 
 void test_tls_server(void) {
-  ezgrpc2_server *server = new_tls_server("test_cert.pem", "test_key.pem");
+  grpc_server *server = new_tls_server("test_cert.pem", "test_key.pem");
   TEST_ASSERT_NOT_NULL(server);
-  TEST_ASSERT_NOT_NULL(ezgrpc2_server_tls_native(server));
-  ezgrpc2_server_free(server);
+  TEST_ASSERT_NOT_NULL(grpc_server_tls_native(server));
+  grpc_server_free(server);
 
-  server = ezgrpc2_server_new(
-      &(ezgrpc2_config){.port = 19995, .ipv4_addr = "127.0.0.1", .log_level = EZGRPC2_LOG_OFF});
+  server = grpc_server_new(
+      &(grpc_config){.port = 19995, .ipv4_addr = "127.0.0.1", .log_level = GRPC_LOG_OFF});
   TEST_ASSERT_NOT_NULL(server);
-  TEST_ASSERT_NULL(ezgrpc2_server_tls_native(server));
-  ezgrpc2_server_free(server);
+  TEST_ASSERT_NULL(grpc_server_tls_native(server));
+  grpc_server_free(server);
 }
 
 int main(void) {

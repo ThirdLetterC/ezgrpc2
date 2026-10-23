@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive Python gRPC Client for ezgrpc2 Greeter Service.
+Comprehensive Python gRPC Client for grpc Greeter Service.
 Tests:
   1. Unary RPC (SayHello) with custom binary metadata ('x-custom-bin') and trailing metadata verification.
   2. Unary RPC (SayHelloAgain).
@@ -78,7 +78,7 @@ def main():
         assert trailers.get('x-custom-reply') == 'pong', f"Expected trailer x-custom-reply=pong, got {trailers}"
 
         # 2. Call SayHelloAgain
-        name2 = "ezgrpc2"
+        name2 = "grpc"
         print(f"\n[client] 2. Sending SayHelloAgain request (name='{name2}')...")
         req2 = helloworld_pb2.HelloRequest(name=name2)
         resp2 = stub.SayHelloAgain(req2, timeout=5)
