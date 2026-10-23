@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_STATUS_H
-#define EZGRPC2_STATUS_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -32,5 +31,3 @@ typedef enum ezgrpc2_status {
  * the ``grpc-message`` of calls finished with an error and no message.
  */
 EZGRPC2_API const char *ezgrpc2_status_str(ezgrpc2_status status);
-
-#endif /* EZGRPC2_STATUS_H */

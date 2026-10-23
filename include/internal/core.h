@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_CORE_H
-#define EZGRPC2_CORE_H
+#pragma once
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -387,5 +386,3 @@ void tls_free(ezgrpc2_server *server);
 
 /* ezgrpc2_message.c: a message with a compressed flag */
 ezgrpc2_message *message_create(u8 cflag, const void *data, size_t len);
-
-#endif

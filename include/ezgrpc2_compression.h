@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_COMPRESSION_H
-#define EZGRPC2_COMPRESSION_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 #include "ezgrpc2_message.h"
@@ -53,5 +52,3 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_message_compress_gzip(const ezgrpc2_message
  * Returns nullptr on decompression failure.
  */
 EZGRPC2_API ezgrpc2_message *ezgrpc2_message_decompress_gzip(const ezgrpc2_message *msg);
-
-#endif /* EZGRPC2_COMPRESSION_H */

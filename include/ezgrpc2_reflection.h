@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_REFLECTION_H
-#define EZGRPC2_REFLECTION_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 #include "ezgrpc2_error.h"
@@ -24,5 +23,3 @@ EZGRPC2_API ezgrpc2_err ezgrpc2_reflection_add_file_descriptor(ezgrpc2_server *s
                                                                const char *symbol_or_filename,
                                                                const uint8_t *descriptor,
                                                                size_t len);
-
-#endif /* EZGRPC2_REFLECTION_H */

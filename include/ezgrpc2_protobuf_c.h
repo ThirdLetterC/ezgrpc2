@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_PROTOBUF_C_H
-#define EZGRPC2_PROTOBUF_C_H
+#pragma once
 
 #include <protobuf-c/protobuf-c.h>
 #include "ezgrpc2_call.h"
@@ -57,5 +56,3 @@ EZGRPC2_API void ezgrpc2_pb_free_unpacked(ProtobufCMessage *message);
  * Serializes ``message`` and sends it on ``call``, like ezgrpc2_call_send().
  */
 EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_pb(ezgrpc2_call *call, const ProtobufCMessage *message);
-
-#endif /* EZGRPC2_PROTOBUF_C_H */

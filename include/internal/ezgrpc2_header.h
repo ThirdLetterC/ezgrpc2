@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_HEADER_H
-#define EZGRPC2_HEADER_H
+#pragma once
 
 #include <stddef.h>
 
@@ -12,5 +11,3 @@ struct ezgrpc2_header {
   size_t valuelen;
   const char *value;
 };
-
-#endif

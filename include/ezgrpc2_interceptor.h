@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_INTERCEPTOR_H
-#define EZGRPC2_INTERCEPTOR_H
+#pragma once
 
 #include "ezgrpc2_call.h"
 #include "ezgrpc2_defs.h"
@@ -43,5 +42,3 @@ typedef bool (*ezgrpc2_token_validator_fn)(const char *token, void *userdata);
  */
 EZGRPC2_API ezgrpc2_interceptor ezgrpc2_interceptor_bearer_auth(ezgrpc2_token_validator_fn validator,
                                                                 void *userdata);
-
-#endif /* EZGRPC2_INTERCEPTOR_H */

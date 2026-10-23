@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_ERROR_H
-#define EZGRPC2_ERROR_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -38,5 +37,3 @@ typedef enum ezgrpc2_err {
  * Returns a static description of an error code.
  */
 EZGRPC2_API const char *ezgrpc2_strerror(ezgrpc2_err err);
-
-#endif /* EZGRPC2_ERROR_H */

@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_INTERNAL_TLS_H
-#define EZGRPC2_INTERNAL_TLS_H
+#pragma once
 
 /* The TLS layer never touches the socket. Ciphertext received by the event
  * loop is handed over with ezgrpc2_tls_feed() and the ciphertext to send is
@@ -92,5 +91,3 @@ static inline void tls_io_free(ezgrpc2_tls_io *io) {
   buf_free(&io->in);
   buf_free(&io->out);
 }
-
-#endif

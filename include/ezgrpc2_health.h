@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_HEALTH_H
-#define EZGRPC2_HEALTH_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 #include "ezgrpc2_error.h"
@@ -34,5 +33,3 @@ EZGRPC2_API ezgrpc2_err ezgrpc2_health_set_status(ezgrpc2_server *server, const 
  */
 EZGRPC2_API ezgrpc2_health_status ezgrpc2_health_get_status(ezgrpc2_server *server,
                                                             const char *service);
-
-#endif /* EZGRPC2_HEALTH_H */

@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_SERVER_H
-#define EZGRPC2_SERVER_H
+#pragma once
 
 #include <stdio.h>
 #include "ezgrpc2_call.h"
@@ -172,5 +171,3 @@ EZGRPC2_API void *ezgrpc2_server_tls_native(ezgrpc2_server *server);
  * The license text of ezgrpc2.
  */
 EZGRPC2_API const char *ezgrpc2_license(void);
-
-#endif /* EZGRPC2_SERVER_H */

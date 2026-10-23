@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_MEM_H
-#define EZGRPC2_MEM_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -37,5 +36,3 @@ EZGRPC2_API void ezgrpc2_free(void *ptr);
 EZGRPC2_API void *ezgrpc2_aligned_alloc(size_t alignment, size_t size);
 EZGRPC2_API char *ezgrpc2_strdup(const char *s);
 EZGRPC2_API char *ezgrpc2_strndup(const char *s, size_t n);
-
-#endif /* EZGRPC2_MEM_H */

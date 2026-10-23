@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_METADATA_H
-#define EZGRPC2_METADATA_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -29,5 +28,3 @@ EZGRPC2_API uint8_t *ezgrpc2_metadata_decode_bin(const char *base64, size_t len,
  * Returns a NUL-terminated string to free with ezgrpc2_free(), or nullptr.
  */
 EZGRPC2_API char *ezgrpc2_metadata_encode_bin(const uint8_t *data, size_t len, size_t *out_len);
-
-#endif /* EZGRPC2_METADATA_H */

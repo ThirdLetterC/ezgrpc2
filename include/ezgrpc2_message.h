@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_MESSAGE_H
-#define EZGRPC2_MESSAGE_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -50,5 +49,3 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_message_alloc(size_t len);
  * Frees a message. Accepts nullptr.
  */
 EZGRPC2_API void ezgrpc2_message_free(ezgrpc2_message *message);
-
-#endif /* EZGRPC2_MESSAGE_H */

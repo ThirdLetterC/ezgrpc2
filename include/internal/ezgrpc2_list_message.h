@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_LIST_MESSAGE_H
-#define EZGRPC2_LIST_MESSAGE_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 #include "ezgrpc2_list.h"
@@ -60,5 +59,3 @@ static inline void ezgrpc2_list_message_concat_and_empty_src(ezgrpc2_list_messag
                                                              ezgrpc2_list_message_t *src) {
   ezgrpc2_list_concat_and_empty_src((ezgrpc2_list *)dst, (ezgrpc2_list *)src);
 }
-
-#endif /* EZGRPC2_LIST_MESSAGE_H */

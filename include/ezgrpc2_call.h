@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_CALL_H
-#define EZGRPC2_CALL_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 #include "ezgrpc2_error.h"
@@ -152,5 +151,3 @@ EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_async(ezgrpc2_call *call, ezgrpc2_mess
  */
 EZGRPC2_API ezgrpc2_err ezgrpc2_call_finish_async(ezgrpc2_call *call, ezgrpc2_status status,
                                                   const char *message);
-
-#endif /* EZGRPC2_CALL_H */

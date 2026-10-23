@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_MESSAGES_H
-#define EZGRPC2_MESSAGES_H
+#pragma once
 
 #include "ezgrpc2_list_message.h"
 
@@ -29,5 +28,3 @@ static inline size_t ezgrpc2_messages_count(ezgrpc2_messages *messages) {
 static inline void ezgrpc2_messages_free(ezgrpc2_messages *messages) {
   ezgrpc2_list_message_free(messages);
 }
-
-#endif /* EZGRPC2_MESSAGES_H */

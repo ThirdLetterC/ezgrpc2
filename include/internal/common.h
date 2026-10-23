@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_COMMON_H
-#define EZGRPC2_COMMON_H
+#pragma once
 
 /* Private library helpers; public headers must not include this file. */
 
@@ -31,6 +30,4 @@ static inline size_t ezgrpc2_align_up(size_t size, size_t alignment) {
 
 #ifndef CONFIG_STREAM_MAX_HEADERS
 #define CONFIG_STREAM_MAX_HEADERS 32
-#endif
-
 #endif

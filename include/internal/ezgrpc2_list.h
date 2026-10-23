@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_LIST_H
-#define EZGRPC2_LIST_H
+#pragma once
 #include <stdlib.h>
 #include "ezgrpc2_defs.h"
 
@@ -56,4 +55,3 @@ int ezgrpc2_list_is_empty(ezgrpc2_list *list);
 /** Call ``func`` for each value in ``list`` from front to back. */
 void ezgrpc2_list_foreach(ezgrpc2_list *list, void (*func)(const void *data, const void *userdata),
                           void *userdata);
-#endif

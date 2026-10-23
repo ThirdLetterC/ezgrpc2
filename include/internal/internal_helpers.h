@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_INTERNAL_HELPERS_H
-#define EZGRPC2_INTERNAL_HELPERS_H
+#pragma once
 
 #include <stdio.h>
 #include <string.h>
@@ -60,5 +59,3 @@ static inline uint32_t uread_u32(const void *p) {
   memcpy(&ret, p, 4);
   return ret;
 }
-
-#endif

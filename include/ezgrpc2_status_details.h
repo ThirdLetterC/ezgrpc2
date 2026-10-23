@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_STATUS_DETAILS_H
-#define EZGRPC2_STATUS_DETAILS_H
+#pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -47,5 +46,3 @@ EZGRPC2_API ezgrpc2_err ezgrpc2_call_finish_with_details(ezgrpc2_call *call, ezg
                                                          const char *message,
                                                          const ezgrpc2_status_detail_entry *details,
                                                          size_t nb_details);
-
-#endif /* EZGRPC2_STATUS_DETAILS_H */

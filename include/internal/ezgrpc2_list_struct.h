@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_LIST_STRUCT_H
-#define EZGRPC2_LIST_STRUCT_H
+#pragma once
 #include <stdlib.h>
 #include "ezgrpc2_list.h"
 
@@ -23,5 +22,3 @@ static inline void ezgrpc2_list_init(ezgrpc2_list *list) {
   list->back = nullptr;
   list->count = 0;
 }
-
-#endif

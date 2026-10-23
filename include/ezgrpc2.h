@@ -1,6 +1,5 @@
 /* EZgRPC2 is a gRPC server library in C. */
-#ifndef EZGRPC2_H
-#define EZGRPC2_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 #include "ezgrpc2_error.h"
@@ -25,5 +24,3 @@
 #if defined(EZGRPC2_ENABLE_FLATCC)
 #include "ezgrpc2_flatcc.h"
 #endif
-
-#endif /* EZGRPC2_H */

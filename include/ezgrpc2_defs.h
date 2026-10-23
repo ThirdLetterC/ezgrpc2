@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_DEFS_H
-#define EZGRPC2_DEFS_H
+#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -18,5 +17,3 @@
 #define static_assert _Static_assert
 #endif
 #endif
-
-#endif /* EZGRPC2_DEFS_H */

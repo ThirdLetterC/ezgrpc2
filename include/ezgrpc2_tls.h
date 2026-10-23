@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_TLS_H
-#define EZGRPC2_TLS_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -27,5 +26,3 @@ EZGRPC2_API const char *ezgrpc2_tls_backend(void);
  * Returns the version string reported by the TLS library in use, or ``""``.
  */
 EZGRPC2_API const char *ezgrpc2_tls_backend_version(void);
-
-#endif /* EZGRPC2_TLS_H */

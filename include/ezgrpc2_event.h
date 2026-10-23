@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_EVENT_H
-#define EZGRPC2_EVENT_H
+#pragma once
 
 #include "ezgrpc2_call.h"
 #include "ezgrpc2_defs.h"
@@ -28,5 +27,3 @@ typedef struct ezgrpc2_event {
   /** The userdata given to ezgrpc2_server_register_path(). */
   void *userdata;
 } ezgrpc2_event;
-
-#endif /* EZGRPC2_EVENT_H */

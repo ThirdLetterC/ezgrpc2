@@ -1,5 +1,4 @@
-#ifndef EZGRPC2_FLATCC_H
-#define EZGRPC2_FLATCC_H
+#pragma once
 
 #include "ezgrpc2_defs.h"
 
@@ -84,5 +83,3 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder);
  * ezgrpc2_call_send(), and resets the builder.
  */
 EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_fb(ezgrpc2_call *call, flatcc_builder_t *builder);
-
-#endif /* EZGRPC2_FLATCC_H */
