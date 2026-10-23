@@ -38,7 +38,7 @@ void test_gzip_compression_roundtrip(void) {
 
 void test_message_compress_decompress(void) {
   const char *msg_text = "Test ezgrpc2_message compression wrappers";
-  ezgrpc2_message *orig = ezgrpc2_message_new(0, (void *)msg_text, strlen(msg_text));
+  ezgrpc2_message *orig = ezgrpc2_message_new(msg_text, strlen(msg_text));
   TEST_ASSERT_NOT_NULL(orig);
   TEST_ASSERT_EQUAL_UINT8(0, orig->cflag);
 

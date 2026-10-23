@@ -1,57 +1,51 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 #include "ezgrpc2.h"
 #include "unity.h"
 
 void setUp(void) {}
 void tearDown(void) {}
 
+static ezgrpc2_server *new_tls_server(const char *cert, const char *key) {
+  return ezgrpc2_server_new(&(ezgrpc2_config){
+      .port = 19995,
+      .ipv4_addr = "127.0.0.1",
+      .tls = {.cert_file = cert, .key_file = key},
+      .log_level = EZGRPC2_LOG_OFF,
+  });
+}
+
 void test_tls_backend(void) {
   /* the library must be built with the backend the build asked for */
   TEST_ASSERT_EQUAL_STRING(EXPECTED_TLS_BACKEND, ezgrpc2_tls_backend());
-  TEST_ASSERT_NOT_NULL(ezgrpc2_tls_backend_version());
   TEST_ASSERT_TRUE(strlen(ezgrpc2_tls_backend_version()) > 0);
   printf("TLS backend: %s (%s)\n", ezgrpc2_tls_backend(), ezgrpc2_tls_backend_version());
 }
 
-void test_tls_invalid_args(void) {
-  TEST_ASSERT_NULL(ezgrpc2_tls_init_server_ctx(nullptr, nullptr));
-  TEST_ASSERT_NULL(ezgrpc2_tls_init_server_ctx("nonexistent_cert.pem", "nonexistent_key.pem"));
+void test_tls_invalid_files(void) {
+  TEST_ASSERT_NULL(new_tls_server("nonexistent_cert.pem", "nonexistent_key.pem"));
   /* a key that does not belong to the certificate */
-  TEST_ASSERT_NULL(ezgrpc2_tls_init_server_ctx("test_cert.pem", "test_cert.pem"));
-  TEST_ASSERT_EQUAL_INT(1, ezgrpc2_server_enable_tls(nullptr, "cert.pem", "key.pem"));
+  TEST_ASSERT_NULL(new_tls_server("test_cert.pem", "test_cert.pem"));
 }
 
-void test_tls_init_and_enable(void) {
-  ezgrpc2_tls_ctx *ctx = ezgrpc2_tls_init_server_ctx("test_cert.pem", "test_key.pem");
-  TEST_ASSERT_NOT_NULL(ctx);
-  TEST_ASSERT_NOT_NULL(ezgrpc2_tls_ctx_native(ctx));
-  ezgrpc2_tls_free_server_ctx(ctx);
-
-  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19996, nullptr, 0, 16, nullptr, nullptr);
+void test_tls_server(void) {
+  ezgrpc2_server *server = new_tls_server("test_cert.pem", "test_key.pem");
   TEST_ASSERT_NOT_NULL(server);
-
-  int rc = ezgrpc2_server_enable_tls(server, "test_cert.pem", "test_key.pem");
-  TEST_ASSERT_EQUAL_INT(0, rc);
-
+  TEST_ASSERT_NOT_NULL(ezgrpc2_server_tls_native(server));
   ezgrpc2_server_free(server);
-}
 
-void test_server_new_tls(void) {
-  ezgrpc2_server *server = ezgrpc2_server_new_tls("0.0.0.0", 19995, nullptr, 0, 16, "test_cert.pem",
-                                                  "test_key.pem", nullptr, nullptr);
+  server = ezgrpc2_server_new(
+      &(ezgrpc2_config){.port = 19995, .ipv4_addr = "127.0.0.1", .log_level = EZGRPC2_LOG_OFF});
   TEST_ASSERT_NOT_NULL(server);
-
+  TEST_ASSERT_NULL(ezgrpc2_server_tls_native(server));
   ezgrpc2_server_free(server);
 }
 
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_tls_backend);
-  RUN_TEST(test_tls_invalid_args);
-  RUN_TEST(test_tls_init_and_enable);
-  RUN_TEST(test_server_new_tls);
+  RUN_TEST(test_tls_invalid_files);
+  RUN_TEST(test_tls_server);
   return UNITY_END();
 }

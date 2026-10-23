@@ -1,17 +1,12 @@
 CC ?= gcc
 AR ?= ar
 
-CONFIG_PATH_MAX_LEN = 64
-CONFIG_STREAM_MAX_HEADERS = 32
-CONFIG_CACHE_LINE_SIZE = 64
-
 export PATH := $(HOME)/.local/bin:$(PATH)
 
 # Allocator configuration:
 #   ALLOCATOR=default   (standard libc malloc)
 #   ALLOCATOR=mimalloc  (Microsoft mimalloc, links -lmimalloc)
 #   ALLOCATOR=jemalloc  (jemalloc, links -ljemalloc)
-#   ALLOCATOR=custom    (runtime pluggable custom allocator via ezgrpc2_set_allocator)
 # Convenience aliases:
 #   make MIMALLOC=1
 #   make JEMALLOC=1
@@ -27,17 +22,14 @@ endif
 
 ifeq ($(ALLOCATOR),mimalloc)
   CFLAGS += -DEZGRPC2_USE_MIMALLOC
-  LDFLAGS += -lmimalloc
+  ALLOC_LIBS = -lmimalloc
 endif
 
 ifeq ($(ALLOCATOR),jemalloc)
   CFLAGS += -DEZGRPC2_USE_JEMALLOC
-  LDFLAGS += -ljemalloc
+  ALLOC_LIBS = -ljemalloc
 endif
 
-ifeq ($(ALLOCATOR),custom)
-  CFLAGS += -DEZGRPC2_USE_CUSTOM_ALLOCATOR
-endif
 
 # Protobuf-C integration:
 # Set PROTOBUF_C=1 to enable protobuf-c support (or 0 to disable).
@@ -48,7 +40,7 @@ endif
 
 ifeq ($(PROTOBUF_C),1)
   CFLAGS += -DEZGRPC2_ENABLE_PROTOBUF_C
-  LDFLAGS += -lprotobuf-c
+  PROTOBUF_LIBS = -lprotobuf-c
 endif
 
 # FlatBuffers integration (flatcc):
@@ -86,7 +78,7 @@ endif
 
 ifeq ($(ZLIB),1)
   CFLAGS += -DEZGRPC2_ENABLE_ZLIB
-  LDFLAGS += -lz
+  ZLIB_LIBS = -lz
 endif
 
 # Libuv event loop:
@@ -94,7 +86,6 @@ LIBUV_CFLAGS ?= $(shell pkg-config --cflags libuv 2>/dev/null)
 LIBUV_LIBS ?= $(shell pkg-config --libs libuv 2>/dev/null || echo "-luv")
 
 CFLAGS += $(LIBUV_CFLAGS)
-LDFLAGS += $(LIBUV_LIBS)
 
 # TLS backend:
 #   TLS=openssl                      OpenSSL (the default when it is installed)
@@ -143,10 +134,6 @@ ifneq ($(TLS_PREFIX),)
   CFLAGS += -I$(TLS_PREFIX)/include
   TLS_LIBS := -L$(TLS_PREFIX)/lib -Wl,-rpath,$(TLS_PREFIX)/lib $(TLS_LIBS)
 endif
-
-CFLAGS += -DCONFIG_PATH_MAX_LEN=$(CONFIG_PATH_MAX_LEN)
-CFLAGS += -DCONFIG_STREAM_MAX_HEADERS=$(CONFIG_STREAM_MAX_HEADERS)
-CFLAGS += -DCONFIG_CACHE_LINE_SIZE=$(CONFIG_CACHE_LINE_SIZE)
 
 # C23 standard flag with fallback to -std=c2x for GCC < 14
 C_STD ?= $(shell $(CC) -std=c23 -E -x c /dev/null >/dev/null 2>&1 && echo "-std=c23" || echo "-std=c2x")
@@ -198,3 +185,7 @@ ifeq ($(ASAN),1)
   LDFLAGS += -fsanitize=address
   CFLAGS += -fsanitize=address
 endif
+
+# Everything libezgrpc2.a needs. It must follow the library on the link line:
+#   $(CC) app.o -o app $(LDFLAGS) -l:libezgrpc2.a $(EZGRPC2_DEPS)
+EZGRPC2_DEPS = -lnghttp2 $(LIBUV_LIBS) $(ZLIB_LIBS) $(TLS_LIBS) $(FLATCC_LIBS) $(PROTOBUF_LIBS) $(ALLOC_LIBS) -lpthread

@@ -2,16 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include "ezgrpc2_reflection.h"
-#include "ezgrpc2_session.h"
-#include "ezgrpc2_message.h"
-#include "ezgrpc2_messages.h"
-#include "ezgrpc2_grpc_status.h"
-#include "ezgrpc2_mem.h"
 #include "core.h"
 
-#define MAX_DESCRIPTORS 32
-#define MAX_SYMBOL_LEN  128
+#define MAX_SYMBOL_LEN 128
 
 typedef struct descriptor_entry {
   char symbol[MAX_SYMBOL_LEN];
@@ -19,11 +12,11 @@ typedef struct descriptor_entry {
   size_t len;
 } descriptor_entry;
 
-static descriptor_entry s_descriptors[MAX_DESCRIPTORS];
-static size_t s_descriptors_count = 0;
-static pthread_mutex_t s_reflection_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static const int s_reflection_userdata_marker = 0x5245464C; // "REFL"
+/* per server, used on the server thread */
+struct reflection_state {
+  descriptor_entry *entries;
+  size_t nb_entries;
+};
 
 static size_t varint_size(uint64_t val) {
   size_t size = 0;
@@ -59,53 +52,61 @@ static uint64_t read_varint(const uint8_t *buf, size_t len, size_t *seek) {
   return val;
 }
 
-EZGRPC2_API int ezgrpc2_reflection_add_file_descriptor(const char *symbol_or_filename,
-                                                       const uint8_t *descriptor_bytes,
-                                                       size_t descriptor_len) {
-  if (symbol_or_filename == nullptr || descriptor_bytes == nullptr || descriptor_len == 0) {
-    return 1;
-  }
+static struct reflection_state *reflection_state_get(ezgrpc2_server *server) {
+  if (server->reflection == nullptr)
+    server->reflection = ezgrpc2_calloc(1, sizeof(*server->reflection));
+  return server->reflection;
+}
 
-  pthread_mutex_lock(&s_reflection_lock);
-  if (s_descriptors_count >= MAX_DESCRIPTORS) {
-    pthread_mutex_unlock(&s_reflection_lock);
-    return 2;
-  }
+void reflection_free(ezgrpc2_server *server) {
+  struct reflection_state *state = server->reflection;
+  if (state == nullptr)
+    return;
+  for (size_t i = 0; i < state->nb_entries; i++)
+    ezgrpc2_free(state->entries[i].data);
+  ezgrpc2_free(state->entries);
+  ezgrpc2_free(state);
+  server->reflection = nullptr;
+}
 
-  uint8_t *copy = ezgrpc2_malloc(descriptor_len);
-  if (copy == nullptr) {
-    pthread_mutex_unlock(&s_reflection_lock);
-    return 3;
+EZGRPC2_API ezgrpc2_err ezgrpc2_reflection_add_file_descriptor(ezgrpc2_server *server,
+                                                               const char *symbol_or_filename,
+                                                               const uint8_t *descriptor,
+                                                               size_t len) {
+  if (server == nullptr || symbol_or_filename == nullptr || descriptor == nullptr || len == 0) {
+    return EZGRPC2_ERR_INVALID;
   }
-  memcpy(copy, descriptor_bytes, descriptor_len);
+  struct reflection_state *state = reflection_state_get(server);
+  if (state == nullptr)
+    return EZGRPC2_ERR_NOMEM;
 
-  descriptor_entry *e = &s_descriptors[s_descriptors_count++];
+  descriptor_entry *entries =
+      ezgrpc2_realloc(state->entries, (state->nb_entries + 1) * sizeof(*entries));
+  if (entries == nullptr)
+    return EZGRPC2_ERR_NOMEM;
+  state->entries = entries;
+
+  uint8_t *copy = ezgrpc2_malloc(len);
+  if (copy == nullptr)
+    return EZGRPC2_ERR_NOMEM;
+  memcpy(copy, descriptor, len);
+
+  descriptor_entry *e = &state->entries[state->nb_entries++];
   strncpy(e->symbol, symbol_or_filename, sizeof(e->symbol) - 1);
   e->symbol[sizeof(e->symbol) - 1] = '\0';
   e->data = copy;
-  e->len = descriptor_len;
-
-  pthread_mutex_unlock(&s_reflection_lock);
-  return 0;
-}
-
-EZGRPC2_API int ezgrpc2_reflection_register(ezgrpc2_server *server) {
-  if (server == nullptr) {
-    return 1;
-  }
-  int rc1 = ezgrpc2_server_register_path(server, EZGRPC2_REFLECTION_V1ALPHA_PATH,
-                                         (void *)&s_reflection_userdata_marker, 0, 0);
-  int rc2 = ezgrpc2_server_register_path(server, EZGRPC2_REFLECTION_V1_PATH,
-                                         (void *)&s_reflection_userdata_marker, 0, 0);
-  return (rc1 == 0 && rc2 == 0) ? 0 : 1;
+  e->len = len;
+  return EZGRPC2_OK;
 }
 
 static size_t collect_services(ezgrpc2_server *server, char services[][MAX_SYMBOL_LEN],
                                size_t max_services) {
   size_t count = 0;
 
-  for (size_t i = 0; i < server->nb_paths && count < max_services; i++) {
-    const char *p = server->paths[i].path;
+  for (size_t i = 0; i < server->nb_routes && count < max_services; i++) {
+    if (server->routes[i]->disabled)
+      continue;
+    const char *p = server->routes[i]->path;
     if (p == nullptr || *p != '/')
       continue;
 
@@ -206,26 +207,11 @@ static uint8_t *build_list_services_response(const char services[][MAX_SYMBOL_LE
   return buf;
 }
 
-EZGRPC2_API bool ezgrpc2_reflection_handle_event(ezgrpc2_server *server, ezgrpc2_event *event) {
-  if (server == nullptr || event == nullptr) {
-    return false;
-  }
-  if (event->userdata != (void *)&s_reflection_userdata_marker) {
-    return false;
-  }
-
-  if (event->type != EZGRPC2_EVENT_MESSAGE) {
-    return true;
-  }
-
-  ezgrpc2_message *in_msg = ezgrpc2_messages_peek_front(event->message.messages);
-  if (in_msg == nullptr) {
-    if (event->message.end_stream) {
-      ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                        EZGRPC2_GRPC_STATUS_OK);
-    }
-    return true;
-  }
+/* one ServerReflectionRequest of the stream: answer it */
+static void reflection_on_message(ezgrpc2_call *call, const ezgrpc2_message *in_msg,
+                                  void *userdata) {
+  ezgrpc2_server *server = userdata;
+  struct reflection_state *state = server->reflection;
 
   // Parse request
   const uint8_t *req_data = in_msg->data;
@@ -275,12 +261,11 @@ EZGRPC2_API bool ezgrpc2_reflection_handle_event(ezgrpc2_server *server, ezgrpc2
     size_t nb_services = collect_services(server, services, 64);
     resp_bytes = build_list_services_response(services, nb_services, req_data, req_len, &resp_len);
   } else if (is_file_query) {
-    pthread_mutex_lock(&s_reflection_lock);
     const descriptor_entry *found = nullptr;
-    for (size_t i = 0; i < s_descriptors_count; i++) {
-      if (strstr(s_descriptors[i].symbol, queried_symbol) ||
-          strstr(queried_symbol, s_descriptors[i].symbol)) {
-        found = &s_descriptors[i];
+    for (size_t i = 0; state != nullptr && i < state->nb_entries; i++) {
+      if (strstr(state->entries[i].symbol, queried_symbol) ||
+          strstr(queried_symbol, state->entries[i].symbol)) {
+        found = &state->entries[i];
         break;
       }
     }
@@ -339,24 +324,31 @@ EZGRPC2_API bool ezgrpc2_reflection_handle_event(ezgrpc2_server *server, ezgrpc2
         resp_len = off;
       }
     }
-    pthread_mutex_unlock(&s_reflection_lock);
   }
 
   if (resp_bytes != nullptr) {
-    ezgrpc2_message *out_msg = ezgrpc2_message_new(0, resp_bytes, resp_len);
+    (void)ezgrpc2_call_send_data(call, resp_bytes, resp_len);
     ezgrpc2_free(resp_bytes);
-    ezgrpc2_messages *res_msgs = ezgrpc2_messages_new(nullptr);
-    ezgrpc2_messages_push(res_msgs, out_msg);
-
-    ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id,
-                                       res_msgs);
-    ezgrpc2_messages_free(res_msgs);
   }
+}
 
-  if (event->message.end_stream) {
-    ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                      EZGRPC2_GRPC_STATUS_OK);
-  }
+/* the client closed its side of the stream */
+static void reflection_on_end(ezgrpc2_call *call, [[maybe_unused]] void *userdata) {
+  (void)ezgrpc2_call_finish(call, EZGRPC2_STATUS_OK, nullptr);
+}
 
-  return true;
+EZGRPC2_API ezgrpc2_err ezgrpc2_reflection_enable(ezgrpc2_server *server) {
+  if (server == nullptr)
+    return EZGRPC2_ERR_INVALID;
+  if (reflection_state_get(server) == nullptr)
+    return EZGRPC2_ERR_NOMEM;
+  const ezgrpc2_stream_handler handler = {
+      .on_message = reflection_on_message,
+      .on_end = reflection_on_end,
+  };
+  ezgrpc2_err err =
+      ezgrpc2_server_handle_stream(server, EZGRPC2_REFLECTION_V1ALPHA_PATH, &handler, server);
+  if (err != EZGRPC2_OK)
+    return err;
+  return ezgrpc2_server_handle_stream(server, EZGRPC2_REFLECTION_V1_PATH, &handler, server);
 }

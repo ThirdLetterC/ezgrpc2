@@ -1,74 +1,33 @@
 #ifndef EZGRPC2_METADATA_H
 #define EZGRPC2_METADATA_H
 
-#include <stddef.h>
-#include <stdint.h>
-#include "defs.h"
-#include "ezgrpc2_header.h"
-#include "ezgrpc2_server.h"
-#include "ezgrpc2_session_uuid.h"
-#include "ezgrpc2_grpc_status.h"
+#include "ezgrpc2_defs.h"
 
-typedef struct ezgrpc2_metadata_entry {
+/**
+ * A metadata entry (an HTTP/2 header): sent with
+ * :c:func:`ezgrpc2_call_send_metadata()` and :c:func:`ezgrpc2_call_add_trailers()`,
+ * and returned by :c:func:`ezgrpc2_call_metadata_at()`.
+ *
+ * When sending, a length of 0 means ``strlen()``. Keys must be lowercase.
+ * Keys ending in ``-bin`` carry Base64 encoded binary values.
+ */
+typedef struct ezgrpc2_metadata {
   const char *key;
   size_t key_len;
   const char *value;
   size_t value_len;
-} ezgrpc2_metadata_entry;
+} ezgrpc2_metadata;
 
 /**
- * Find a request header/metadata by key (case-insensitive) on the specified stream.
- * Returns pointer to the null-terminated value string, or nullptr if not found.
- * If value_len is non-null, sets *value_len to length of value.
+ * Decodes the Base64 value of a ``-bin`` key.
+ * Returns a buffer to free with ezgrpc2_free(), or nullptr on invalid input.
  */
-EZGRPC2_API const char *ezgrpc2_metadata_get(ezgrpc2_server *server,
-                                             ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-                                             const char *key, size_t *value_len);
+EZGRPC2_API uint8_t *ezgrpc2_metadata_decode_bin(const char *base64, size_t len, size_t *out_len);
 
 /**
- * Returns the total number of request headers received on the specified stream.
+ * Base64 encodes binary data for a ``-bin`` key.
+ * Returns a NULL-terminated string to free with ezgrpc2_free(), or nullptr.
  */
-EZGRPC2_API size_t ezgrpc2_metadata_count(ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid,
-                                          int32_t stream_id);
-
-/**
- * Retrieves the header at index `idx` (0 <= idx < count).
- * Returns 0 on success, non-zero if out of bounds or stream not found.
- */
-EZGRPC2_API int ezgrpc2_metadata_get_at(ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid,
-                                        int32_t stream_id, size_t idx,
-                                        ezgrpc2_metadata_entry *out_entry);
-
-/**
- * Base64 decodes a binary metadata value (for headers ending with '-bin').
- * Allocates buffer using ezgrpc2_malloc. Caller frees with ezgrpc2_free.
- * Returns pointer to decoded bytes, and sets out_len. Returns nullptr on error.
- */
-EZGRPC2_API uint8_t *ezgrpc2_metadata_decode_bin(const char *base64_str, size_t in_len,
-                                                 size_t *out_len);
-
-/**
- * Base64 encodes binary data for a '-bin' header.
- * Allocates null-terminated string using ezgrpc2_malloc. Caller frees with ezgrpc2_free.
- * Returns pointer to base64 string, and sets out_len if non-null. Returns nullptr on error.
- */
-EZGRPC2_API char *ezgrpc2_metadata_encode_bin(const uint8_t *data, size_t in_len, size_t *out_len);
-
-/**
- * Send custom initial metadata (HTTP/2 response headers) on a stream before data frames.
- */
-EZGRPC2_API int ezgrpc2_server_session_stream_send_initial_metadata(
-    ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-    const ezgrpc2_metadata_entry *entries, size_t count);
-
-/**
- * End a stream with status code, optional custom status message, and custom trailing metadata.
- */
-EZGRPC2_API int ezgrpc2_server_session_stream_end2(ezgrpc2_server *server,
-                                                   ezgrpc2_session_uuid session_uuid,
-                                                   int32_t stream_id, ezgrpc2_grpc_status status,
-                                                   const char *custom_status_message,
-                                                   const ezgrpc2_metadata_entry *trailers,
-                                                   size_t nb_trailers);
+EZGRPC2_API char *ezgrpc2_metadata_encode_bin(const uint8_t *data, size_t len, size_t *out_len);
 
 #endif /* EZGRPC2_METADATA_H */

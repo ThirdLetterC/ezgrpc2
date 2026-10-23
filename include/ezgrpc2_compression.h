@@ -1,9 +1,7 @@
 #ifndef EZGRPC2_COMPRESSION_H
 #define EZGRPC2_COMPRESSION_H
 
-#include <stddef.h>
-#include <stdint.h>
-#include "defs.h"
+#include "ezgrpc2_defs.h"
 #include "ezgrpc2_message.h"
 
 typedef enum {
@@ -13,7 +11,7 @@ typedef enum {
 
 /**
  * Compresses data using gzip (RFC 1952).
- * Allocates *out with ezgrpc2_malloc. Caller frees with ezgrpc2_free.
+ * Allocates ``*out`` with ezgrpc2_malloc. Caller frees with ezgrpc2_free.
  * Returns 0 on success, non-zero on failure.
  */
 EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t **out,
@@ -21,7 +19,7 @@ EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t 
 
 /**
  * Decompresses gzip data (RFC 1952).
- * Allocates *out with ezgrpc2_malloc. Caller frees with ezgrpc2_free.
+ * Allocates ``*out`` with ezgrpc2_malloc. Caller frees with ezgrpc2_free.
  * Returns 0 on success, non-zero on failure.
  */
 EZGRPC2_API int ezgrpc2_decompress_gzip(const uint8_t *in, size_t in_len, uint8_t **out,

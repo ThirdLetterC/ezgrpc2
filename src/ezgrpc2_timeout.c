@@ -3,18 +3,15 @@
 #include <stdlib.h>
 #include <limits.h>
 #include "core.h"
-#include "ezgrpc2_session.h"
-#include "ezgrpc2_events_struct.h"
-#include "ezgrpc2_list_struct.h"
 #include "ezgrpc2_timeout.h"
 
-EZGRPC2_API uint64_t ezgrpc2_time_now_ms(void) {
+uint64_t ezgrpc2_time_now_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
 }
 
-EZGRPC2_API int64_t ezgrpc2_timeout_parse_ms(const char *timeout_str) {
+int64_t ezgrpc2_timeout_parse_ms(const char *timeout_str) {
   if (timeout_str == nullptr || *timeout_str == '\0') {
     return -1;
   }
@@ -79,58 +76,47 @@ EZGRPC2_API int64_t ezgrpc2_timeout_parse_ms(const char *timeout_str) {
   return (int64_t)ms;
 }
 
-EZGRPC2_API void ezgrpc2_server_check_deadlines(ezgrpc2_server *server) {
-  if (server == nullptr || server->sessions == nullptr) {
-    return;
-  }
-  /* nothing can have expired yet. this keeps the scan off the hot path */
-  if (server->next_deadline_ms == UINT64_MAX) {
-    return;
-  }
-  uint64_t now_ms = ezgrpc2_time_now_ms();
-  if (now_ms < server->next_deadline_ms) {
-    return;
-  }
-
-  uint64_t next_deadline_ms = UINT64_MAX;
+/* ends the calls past their deadline and returns the earliest deadline left */
+static u64 expire_deadlines(ezgrpc2_server *server, u64 now_ms) {
+  u64 next_deadline_ms = UINT64_MAX;
   for (size_t i = 0; i < server->nb_sessions; i++) {
     ezgrpc2_session *session = &server->sessions[i];
-    if (!session->is_active || session->is_closing || session->ngsession == nullptr) {
+    if (!session->is_active || session->is_closing || session->ngsession == nullptr)
       continue;
-    }
-
-    i32 expired_sids[64];
-    void *userdatas[64];
-    size_t count = 0;
-
-    for (ezgrpc2_stream *stream = session->streams; stream != nullptr; stream = stream->next) {
-      if (!stream->is_deadline_set)
-        continue;
-      if (now_ms >= stream->deadline_ms && count < 64) {
-        stream->is_deadline_set = 0;
-        expired_sids[count] = stream->stream_id;
-        userdatas[count] = stream->path ? stream->path->userdata : nullptr;
-        count++;
-      } else if (stream->deadline_ms < next_deadline_ms) {
-        /* still pending, or left over for the next scan */
-        next_deadline_ms = stream->deadline_ms;
+    ezgrpc2_stream *stream = session->streams;
+    while (stream != nullptr) {
+      /* call_abort() may not free the stream, but read next first anyway */
+      ezgrpc2_stream *next = stream->next;
+      if (stream->is_deadline_set) {
+        if (now_ms >= stream->deadline_ms) {
+          stream->is_deadline_set = false;
+          if (stream->call != nullptr)
+            call_abort(stream->call, EZGRPC2_STATUS_DEADLINE_EXCEEDED, nullptr);
+        } else if (stream->deadline_ms < next_deadline_ms) {
+          next_deadline_ms = stream->deadline_ms;
+        }
       }
-    }
-
-    for (size_t s = 0; s < count; s++) {
-      if (server->events != nullptr) {
-        ezgrpc2_event ev = {.type = EZGRPC2_EVENT_TIMEOUT,
-                            .session_uuid = session->session_uuid,
-                            .userdata = userdatas[s],
-                            .timeout = {
-                                .stream_id = expired_sids[s],
-                            }};
-        ezgrpc2_events_write(server->events, ev);
-      }
-      ezgrpc2_server_session_stream_end2(server, session->session_uuid, expired_sids[s],
-                                         EZGRPC2_GRPC_STATUS_DEADLINE_EXCEEDED, "Deadline Exceeded",
-                                         nullptr, 0);
+      stream = next;
     }
   }
-  server->next_deadline_ms = next_deadline_ms;
+  return next_deadline_ms;
+}
+
+static void on_deadline_timer(uv_timer_t *timer) {
+  ezgrpc2_server *server = timer->data;
+  server->ready_events++;
+  server->next_deadline_ms = UINT64_MAX;
+  u64 next = expire_deadlines(server, ezgrpc2_time_now_ms());
+  if (next != UINT64_MAX)
+    server_arm_deadline(server, next);
+}
+
+void server_arm_deadline(ezgrpc2_server *server, u64 deadline_ms) {
+  /* the timer already fires earlier */
+  if (deadline_ms >= server->next_deadline_ms)
+    return;
+  server->next_deadline_ms = deadline_ms;
+  u64 now = ezgrpc2_time_now_ms();
+  uv_timer_start(&server->deadline_timer, on_deadline_timer,
+                 deadline_ms > now ? deadline_ms - now : 0, 0);
 }

@@ -1,58 +1,119 @@
-ezgrpc2 documentation
-=====================
+ezgrpc2 API
+===========
 
-The ezgrpc2 functions are built upon the idea of
-looping the following, much like so in a game:
+Include ``ezgrpc2.h``. Every function returns an :c:type:`ezgrpc2_err` (0 on
+success, negative on error) unless it returns a value.
 
+A server is created from an :c:type:`ezgrpc2_config` and serves methods in one
+of two ways:
 
-  * poll
+* **Handlers**: :c:func:`ezgrpc2_server_handle` for methods with a single
+  request (unary and server streaming) and :c:func:`ezgrpc2_server_handle_stream`
+  for client-streaming and bidirectional methods. Run the server with
+  :c:func:`ezgrpc2_server_run` and stop it with :c:func:`ezgrpc2_server_stop`.
 
-  * update
+* **Poll mode**: :c:func:`ezgrpc2_server_register_path`, then call
+  :c:func:`ezgrpc2_server_poll` in your own loop and handle the
+  :c:func:`ezgrpc2_server_events`.
 
-  * render
+Either way, each request is an :c:type:`ezgrpc2_call`: read its metadata, send
+responses with :c:func:`ezgrpc2_call_send` and end it with
+:c:func:`ezgrpc2_call_finish`. To answer from another thread, take a reference
+with :c:func:`ezgrpc2_call_ref` and use :c:func:`ezgrpc2_call_send_async` and
+:c:func:`ezgrpc2_call_finish_async`.
 
-.. autocenum:: ezgrpc2.h::ezgrpc2_status
-   :members:
-       EZGRPC2_STATUS_OK,
-       EZGRPC2_STATUS_CANCELLED,
-       EZGRPC2_STATUS_UNKNOWN,
-       EZGRPC2_STATUS_INVALID_ARGUMENT,
-       EZGRPC2_STATUS_DEADLINE_EXCEEDED,
-       EZGRPC2_STATUS_NOT_FOUND,
-       EZGRPC2_STATUS_ALREADY_EXISTS,
-       EZGRPC2_STATUS_PERMISSION_DENIED,
-       EZGRPC2_STATUS_RESOURCE_EXHAUSTED,
-       EZGRPC2_STATUS_FAILED_PRECONDITION,
-       EZGRPC2_STATUS_OUT_OF_RANGE,
-       EZGRPC2_STATUS_UNIMPLEMENTED,
-       EZGRPC2_STATUS_INTERNAL,
-       EZGRPC2_STATUS_UNAVAILABLE,
-       EZGRPC2_STATUS_DATA_LOSS,
-       EZGRPC2_STATUS_UNAUTHENTICATED,
-       EZGRPC2_STATUS_NULL
-.. autocenum:: ezgrpc2.h::ezgrpc2_event_type
-   :members: EZGRPC2_EVENT_MESSAGE, EZGRPC2_EVENT_DATALOSS, EZGRPC2_EVENT_CANCEL
+Server
+------
 
-.. autocstruct:: ezgrpc2.h::ezgrpc2_server
-.. autocstruct:: ezgrpc2.h::ezgrpc2_path
-   :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_header
-   :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_message
-   :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event
-   :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_message
-   :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_dataloss
-   :members:
-.. autocstruct:: ezgrpc2.h::ezgrpc2_event_cancel
+.. autocmodule:: ezgrpc2_server.h
    :members:
 
+Calls
+-----
 
-.. autocfunction:: ezgrpc2.h::ezgrpc2_server_init
-.. autocfunction:: ezgrpc2.h::ezgrpc2_server_poll
-.. autocfunction:: ezgrpc2.h::ezgrpc2_session_end_stream
-.. autocfunction:: ezgrpc2.h::ezgrpc2_session_end_session
-.. autocfunction:: ezgrpc2.h::ezgrpc2_session_send
-.. autocfunction:: ezgrpc2.h::ezgrpc2_session_find_header
+.. autocmodule:: ezgrpc2_call.h
+   :members:
+
+Events (poll mode)
+------------------
+
+.. autocmodule:: ezgrpc2_event.h
+   :members:
+
+Messages
+--------
+
+.. autocmodule:: ezgrpc2_message.h
+   :members:
+
+Metadata
+--------
+
+.. autocmodule:: ezgrpc2_metadata.h
+   :members:
+
+Errors
+------
+
+.. autocmodule:: ezgrpc2_error.h
+   :members:
+
+gRPC status codes
+-----------------
+
+.. autocmodule:: ezgrpc2_status.h
+   :members:
+
+Rich error details
+------------------
+
+.. autocmodule:: ezgrpc2_status_details.h
+   :members:
+
+Interceptors
+------------
+
+.. autocmodule:: ezgrpc2_interceptor.h
+   :members:
+
+Health checking
+---------------
+
+.. autocmodule:: ezgrpc2_health.h
+   :members:
+
+Server reflection
+-----------------
+
+.. autocmodule:: ezgrpc2_reflection.h
+   :members:
+
+Compression
+-----------
+
+.. autocmodule:: ezgrpc2_compression.h
+   :members:
+
+TLS
+---
+
+.. autocmodule:: ezgrpc2_tls.h
+   :members:
+
+Memory
+------
+
+.. autocmodule:: ezgrpc2_mem.h
+   :members:
+
+Protobuf-C and FlatBuffers
+--------------------------
+
+Built when the libraries are found (``PROTOBUF_C=1``, ``FLATCC=1``):
+
+* ``ezgrpc2_protobuf_c.h``: ``EZGRPC2_PB_UNPACK()``, ``ezgrpc2_pb_pack()`` and
+  ``ezgrpc2_call_send_pb()``.
+* ``ezgrpc2_flatcc.h``: ``EZGRPC2_FB_UNPACK()`` (verified, zero-copy reads),
+  ``ezgrpc2_fb_pack()`` and ``ezgrpc2_call_send_fb()``.
+
+See the comments in those headers.

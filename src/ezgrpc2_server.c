@@ -1,307 +1,477 @@
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "core.h"
-#include "ezgrpc2_header.h"
-#include "ezgrpc2_server.h"
-#include "ezgrpc2_session_info.h"
-#include "ezgrpc2_session_uuid.h"
 #include "ezgrpc2_timeout.h"
-#include "ezgrpc2_tls.h"
 #include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
-#define atlog(...) (void)0
-#define ezlog(...) (void)0
 
-extern ezgrpc2_session_info *session_info_new(void *);
+#define DEFAULT_BACKLOG                1024
+#define DEFAULT_MAX_CONNECTIONS        1024
+#define DEFAULT_MAX_CONCURRENT_STREAMS 1024
+#define DEFAULT_MAX_MESSAGE_SIZE       (1u << 20)
+#define DEFAULT_MAX_FRAME_SIZE         (16u * 1024)
 
-EZGRPC2_API ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server) {
-  ezgrpc2_list *lsession_info = ezgrpc2_list_new(nullptr);
-  assert(lsession_info != nullptr);
+/* ---- logging ------------------------------------------------------------------ */
 
-  for (size_t i = 0; i < server->nb_sessions; i++) {
-    if (!server->sessions[i].is_active || server->sessions[i].is_closing)
-      continue;
-    ezgrpc2_session_info *session_info = session_info_new(nullptr);
-    ezgrpc2_list_push_back(lsession_info, session_info);
-  }
+void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt, ...) {
+  if (server->log_level == EZGRPC2_LOG_OFF || level > server->log_level)
+    return;
 
-  return lsession_info;
+  /* one write per line, so that lines of several servers do not interleave */
+  char line[1024];
+  char dt[128] = {};
+  int n = snprintf(line, sizeof(line), "[%s] ", ezgetdt(dt, sizeof(dt)));
+  va_list ap;
+  va_start(ap, fmt);
+  if (n >= 0 && (size_t)n < sizeof(line))
+    vsnprintf(line + n, sizeof(line) - (size_t)n, fmt, ap);
+  va_end(ap);
+  fputs(line, server->log_file);
 }
 
-EZGRPC2_API ezgrpc2_session_info *
-ezgrpc2_server_get_session_info([[maybe_unused]] ezgrpc2_server *server,
-                                [[maybe_unused]] ezgrpc2_session_uuid *session_uuid) {
+/* ---- routes ------------------------------------------------------------------- */
+
+ezgrpc2_route *server_find_route(ezgrpc2_server *server, const char *path, size_t len) {
+  for (size_t i = 0; i < server->nb_routes; i++) {
+    ezgrpc2_route *route = server->routes[i];
+    if (route->path_len == len && memcmp(route->path, path, len) == 0)
+      return route;
+  }
   return nullptr;
 }
 
-EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const char *ipv4_addr, uint16_t ipv4_port,
-                                               const char *ipv6_addr, uint16_t ipv6_port,
-                                               int backlog,
-                                               ezgrpc2_server_settings *server_settings,
-                                               ezgrpc2_http2_settings *http2_settings) {
-  struct sockaddr_in ipv4_saddr = {};
-  struct sockaddr_in6 ipv6_saddr = {};
-  ezgrpc2_server *server = nullptr;
-  int ipv4_sockfd = -1;
-  int ipv6_sockfd = -1;
+ezgrpc2_err server_add_route(ezgrpc2_server *server, const char *path, route_kind kind,
+                             ezgrpc2_handler_fn handler, const ezgrpc2_stream_handler *stream,
+                             void *userdata) {
+  if (server == nullptr || path == nullptr || path[0] != '/')
+    return EZGRPC2_ERR_INVALID;
 
-  if (ipv4_addr == nullptr && ipv6_addr == nullptr)
-    return nullptr;
-  if (ipv4_addr != nullptr && strnlen(ipv4_addr, 16) > 15)
-    return nullptr;
-  if (ipv6_addr != nullptr && strnlen(ipv6_addr, 64) > 63)
-    return nullptr;
+  size_t len = strlen(path);
+  ezgrpc2_route *route = server_find_route(server, path, len);
+  if (route != nullptr) {
+    if (!route->disabled)
+      return EZGRPC2_ERR_EXISTS;
+  } else {
+    /* routes are never moved: calls point to them */
+    if (server->nb_routes == server->cap_routes) {
+      size_t cap = server->cap_routes ? server->cap_routes * 2 : 16;
+      ezgrpc2_route **routes = ezgrpc2_realloc(server->routes, cap * sizeof(*routes));
+      if (routes == nullptr)
+        return EZGRPC2_ERR_NOMEM;
+      server->routes = routes;
+      server->cap_routes = cap;
+    }
+    route = ezgrpc2_calloc(1, sizeof(*route));
+    if (route == nullptr)
+      return EZGRPC2_ERR_NOMEM;
+    route->path = ezgrpc2_strndup(path, len);
+    if (route->path == nullptr) {
+      ezgrpc2_free(route);
+      return EZGRPC2_ERR_NOMEM;
+    }
+    route->path_len = len;
+    server->routes[server->nb_routes++] = route;
+  }
 
-  server = calloc(1, sizeof(*server));
+  route->kind = kind;
+  route->handler = handler;
+  route->stream = stream != nullptr ? *stream : (ezgrpc2_stream_handler){};
+  route->userdata = userdata;
+  route->disabled = false;
+  return EZGRPC2_OK;
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_handle(ezgrpc2_server *server, const char *path,
+                                              ezgrpc2_handler_fn handler, void *userdata) {
+  if (handler == nullptr)
+    return EZGRPC2_ERR_INVALID;
+  return server_add_route(server, path, ROUTE_UNARY, handler, nullptr, userdata);
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_handle_stream(ezgrpc2_server *server, const char *path,
+                                                     const ezgrpc2_stream_handler *handler,
+                                                     void *userdata) {
+  if (handler == nullptr || handler->on_message == nullptr)
+    return EZGRPC2_ERR_INVALID;
+  return server_add_route(server, path, ROUTE_STREAM, nullptr, handler, userdata);
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path,
+                                                     void *userdata) {
+  return server_add_route(server, path, ROUTE_EVENTS, nullptr, nullptr, userdata);
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_unregister(ezgrpc2_server *server, const char *path) {
+  if (server == nullptr || path == nullptr)
+    return EZGRPC2_ERR_INVALID;
+  ezgrpc2_route *route = server_find_route(server, path, strlen(path));
+  if (route == nullptr || route->disabled)
+    return EZGRPC2_ERR_NOT_FOUND;
+  /* kept, since calls in progress point to it */
+  route->disabled = true;
+  return EZGRPC2_OK;
+}
+
+/* ---- setup ---------------------------------------------------------------------- */
+
+/* binds and listens on one address. returns the socket or -1 */
+static int open_listener(ezgrpc2_server *server, int family, const char *addr, uint16_t port,
+                         int backlog) {
+  struct sockaddr_storage ss = {};
+  socklen_t sslen;
+  if (family == AF_INET) {
+    struct sockaddr_in *sin = (struct sockaddr_in *)&ss;
+    sin->sin_family = AF_INET;
+    sin->sin_port = htons(port);
+    if (inet_pton(AF_INET, addr, &sin->sin_addr) != 1) {
+      LOG_ERROR(server, "invalid IPv4 address '%s'\n", addr);
+      return -1;
+    }
+    sslen = sizeof(*sin);
+  } else {
+    struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)&ss;
+    sin6->sin6_family = AF_INET6;
+    sin6->sin6_port = htons(port);
+    if (inet_pton(AF_INET6, addr, &sin6->sin6_addr) != 1) {
+      LOG_ERROR(server, "invalid IPv6 address '%s'\n", addr);
+      return -1;
+    }
+    sslen = sizeof(*sin6);
+  }
+
+  int fd = socket(family, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  if (fd == -1) {
+    LOG_ERROR(server, "socket: %s\n", strerror(errno));
+    return -1;
+  }
+  (void)setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+  /* lets one server per thread share the port; the kernel spreads connections */
+  (void)setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &(int){1}, sizeof(int));
+  if (family == AF_INET6)
+    (void)setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &(int){1}, sizeof(int));
+
+  if (bind(fd, (struct sockaddr *)&ss, sslen) == -1) {
+    LOG_ERROR(server, "bind %s port %u: %s\n", addr, port, strerror(errno));
+    close(fd);
+    return -1;
+  }
+  if (listen(fd, backlog) == -1) {
+    LOG_ERROR(server, "listen %s port %u: %s\n", addr, port, strerror(errno));
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
+/* hands an open socket to an initialized libuv listener, which then owns it */
+static bool start_listener(ezgrpc2_server *server, uv_tcp_t *listener, int *fd) {
+  listener->data = server;
+  if (uv_tcp_open(listener, *fd) != 0)
+    return false;
+  *fd = -1;
+  return uv_listen((uv_stream_t *)listener, server->config.backlog, on_listener_connection) == 0;
+}
+
+static void on_poll_timer([[maybe_unused]] uv_timer_t *handle) {}
+
+static void run_posted(ezgrpc2_server *server) {
+  pthread_mutex_lock(&server->post_mutex);
+  post_task *task = server->post_head;
+  server->post_head = server->post_tail = nullptr;
+  pthread_mutex_unlock(&server->post_mutex);
+
+  while (task != nullptr) {
+    post_task *next = task->next;
+    task->fn(task->arg);
+    ezgrpc2_free(task);
+    task = next;
+  }
+}
+
+static void on_async(uv_async_t *handle) {
+  ezgrpc2_server *server = handle->data;
+  server->ready_events++;
+  run_posted(server);
+}
+
+EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const ezgrpc2_config *config) {
+  if (config == nullptr || config->port == 0) {
+    fprintf(config != nullptr && config->log_file != nullptr ? config->log_file : stderr,
+            "ezgrpc2_server_new: a port is required\n");
+    return nullptr;
+  }
+
+  ezgrpc2_server *server = ezgrpc2_calloc(1, sizeof(*server));
   if (server == nullptr)
     return nullptr;
-
-  thpool_init(&server->logger_thread, 1, 0);
   server->ipv4_sockfd = -1;
   server->ipv6_sockfd = -1;
-  server->ipv4_addr = nullptr;
-  server->ipv6_addr = nullptr;
-  server->ipv4_port = ipv4_port;
-  server->ipv6_port = ipv6_port;
-  if (ipv4_addr != nullptr) {
-    server->ipv4_addr = strndup(ipv4_addr, 16);
-    assert(server->ipv4_addr != nullptr);
-  }
-  if (ipv6_addr != nullptr) {
-    server->ipv6_addr = strndup(ipv6_addr, 64);
-    assert(server->ipv6_addr != nullptr);
-  }
+  server->next_deadline_ms = UINT64_MAX;
+  pthread_mutex_init(&server->post_mutex, nullptr);
 
-  if (server_settings == nullptr) {
-    ezgrpc2_server_settings *server_settings_ = ezgrpc2_server_settings_new(nullptr);
-    assert(server_settings_ != nullptr);
-    memcpy(&server->server_settings, server_settings_, sizeof(ezgrpc2_server_settings));
-    ezgrpc2_server_settings_free(server_settings_);
-  } else {
-    memcpy(&server->server_settings, server_settings, sizeof(ezgrpc2_server_settings));
-  }
+  /* the configuration, with defaults */
+  ezgrpc2_config *cfg = &server->config;
+  *cfg = *config;
+  if (cfg->backlog <= 0)
+    cfg->backlog = DEFAULT_BACKLOG;
+  if (cfg->max_connections == 0)
+    cfg->max_connections = DEFAULT_MAX_CONNECTIONS;
+  if (cfg->max_concurrent_streams == 0)
+    cfg->max_concurrent_streams = DEFAULT_MAX_CONCURRENT_STREAMS;
+  if (cfg->max_message_size == 0)
+    cfg->max_message_size = DEFAULT_MAX_MESSAGE_SIZE;
+  if (cfg->max_frame_size == 0)
+    cfg->max_frame_size = DEFAULT_MAX_FRAME_SIZE;
+  server->log_level = cfg->log_level == EZGRPC2_LOG_DEFAULT ? EZGRPC2_LOG_INFO : cfg->log_level;
+  server->log_file = cfg->log_file != nullptr ? cfg->log_file : stderr;
+  cfg->log_file = server->log_file;
 
-  if (http2_settings == nullptr) {
-    ezgrpc2_http2_settings *http2_settings_ = ezgrpc2_http2_settings_new(nullptr);
-    assert(http2_settings_ != nullptr);
-    memcpy(&server->http2_settings, http2_settings_, sizeof(ezgrpc2_http2_settings));
-    ezgrpc2_http2_settings_free(http2_settings_);
-  } else {
-    memcpy(&server->http2_settings, http2_settings, sizeof(ezgrpc2_http2_settings));
-  }
-
-  if (server->ipv4_addr != nullptr) {
-    memset(&ipv4_saddr, 0, sizeof(ipv4_saddr));
-    ipv4_saddr.sin_family = AF_INET;
-    ipv4_saddr.sin_addr.s_addr = inet_addr(server->ipv4_addr);
-    ipv4_saddr.sin_port = htons(server->ipv4_port);
-
-    if ((ipv4_sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-      perror("socket");
-      goto err;
-    }
-
-    if (setsockopt(ipv4_sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&(int){1}, sizeof(int))) {
-      perror("setsockopt ipv4");
-      goto err;
-    }
-#ifdef SO_REUSEPORT
-    (void)setsockopt(ipv4_sockfd, SOL_SOCKET, SO_REUSEPORT, (void *)&(int){1}, sizeof(int));
-#endif
-
-    if (bind(ipv4_sockfd, (struct sockaddr *)&ipv4_saddr, sizeof(ipv4_saddr)) == -1) {
-      perror("bind ipv4");
-      goto err;
-    }
-
-    if (listen(ipv4_sockfd, backlog) == -1) {
-      perror("listen ipv4");
-      goto err;
-    }
-
-    if (makenonblock(ipv4_sockfd)) {
-      EZGRPC2_LOG_ERROR(server, "makenonblock failed\n");
-      goto err;
-    }
-
-    EZGRPC2_LOG_NORMAL(server, "listening on ipv4 %s:%d ...\n", server->ipv4_addr,
-                       server->ipv4_port);
-  }
-
-  if (server->ipv6_addr != nullptr) {
-    memset(&ipv6_saddr, 0, sizeof(ipv6_saddr));
-    ipv6_saddr.sin6_family = AF_INET6;
-    if (inet_pton(AF_INET6, server->ipv6_addr, ipv6_saddr.sin6_addr.s6_addr) != 1) {
-      perror("inet_pton");
-      goto err;
-    }
-    ipv6_saddr.sin6_port = htons(server->ipv6_port);
-
-    if ((ipv6_sockfd = socket(AF_INET6, SOCK_STREAM, 0)) == -1) {
-      perror("socket(inet6,sockstream,0)");
-      goto err;
-    }
-
-    if (setsockopt(ipv6_sockfd, SOL_SOCKET, SO_REUSEADDR, (void *)&(int){1}, sizeof(int))) {
-      perror("setsockopt ipv6");
-      goto err;
-    }
-#ifdef SO_REUSEPORT
-    (void)setsockopt(ipv6_sockfd, SOL_SOCKET, SO_REUSEPORT, (void *)&(int){1}, sizeof(int));
-#endif
-    if (setsockopt(ipv6_sockfd, IPPROTO_IPV6, IPV6_V6ONLY, (void *)&(int){1}, sizeof(int))) {
-      perror("setsockopt ipv6");
-      goto err;
-    }
-
-    if (bind(ipv6_sockfd, (struct sockaddr *)&ipv6_saddr, sizeof(ipv6_saddr)) == -1) {
-      perror("bind ipv6");
-      goto err;
-    }
-
-    if (listen(ipv6_sockfd, backlog) == -1) {
-      perror("listen ipv6");
-      goto err;
-    }
-
-    if (makenonblock(ipv6_sockfd)) {
-      EZGRPC2_LOG_ERROR(server, "makenonblock failed\n");
-      goto err;
-    }
-
-    EZGRPC2_LOG_NORMAL(server, "listening on ipv6 [%s]:%d ...\n", server->ipv6_addr,
-                       server->ipv6_port);
-  }
-
-  int uv_res = uv_loop_init(&server->loop);
-  if (uv_res != 0) {
-    perror("uv_loop_init");
+  /* HTTP/2 limits: a frame is 16 KiB to 16 MiB, a window at most 2^31 - 1 */
+  if (cfg->max_frame_size < (16u * 1024) || cfg->max_frame_size > (1u << 24) - 1 ||
+      cfg->max_message_size > INT32_MAX) {
+    LOG_ERROR(server, "max_frame_size or max_message_size is out of range\n");
     goto err;
   }
+
+  const char *ipv4_addr = cfg->ipv4_addr, *ipv6_addr = cfg->ipv6_addr;
+  if (ipv4_addr == nullptr && ipv6_addr == nullptr) {
+    ipv4_addr = "0.0.0.0";
+    ipv6_addr = "::";
+  }
+  if ((ipv4_addr != nullptr && (server->ipv4_addr = ezgrpc2_strdup(ipv4_addr)) == nullptr) ||
+      (ipv6_addr != nullptr && (server->ipv6_addr = ezgrpc2_strdup(ipv6_addr)) == nullptr))
+    goto err;
+  /* the copies outlive the caller's strings */
+  cfg->ipv4_addr = server->ipv4_addr;
+  cfg->ipv6_addr = server->ipv6_addr;
+  cfg->tls.cert_file = cfg->tls.key_file = nullptr;
+
+  if ((config->tls.cert_file == nullptr) != (config->tls.key_file == nullptr)) {
+    LOG_ERROR(server, "TLS needs both tls.cert_file and tls.key_file\n");
+    goto err;
+  }
+  if (config->tls.cert_file != nullptr &&
+      tls_enable(server, config->tls.cert_file, config->tls.key_file) != EZGRPC2_OK)
+    goto err;
+
+  if (server->ipv4_addr != nullptr &&
+      (server->ipv4_sockfd = open_listener(server, AF_INET, server->ipv4_addr, cfg->port,
+                                           cfg->backlog)) == -1)
+    goto err;
+  if (server->ipv6_addr != nullptr &&
+      (server->ipv6_sockfd = open_listener(server, AF_INET6, server->ipv6_addr, cfg->port,
+                                           cfg->backlog)) == -1)
+    goto err;
+
+  if (uv_loop_init(&server->loop) != 0)
+    goto err;
   server->loop_initialized = true;
 
-  uv_res = uv_timer_init(&server->loop, &server->timer);
-  if (uv_res != 0) {
-    perror("uv_timer_init");
+  if (uv_timer_init(&server->loop, &server->timer) != 0)
     goto err;
-  }
   server->timer_active = true;
+  if (uv_timer_init(&server->loop, &server->deadline_timer) != 0)
+    goto err;
+  server->deadline_timer.data = server;
+  server->deadline_timer_active = true;
+  if (uv_async_init(&server->loop, &server->async, on_async) != 0)
+    goto err;
+  server->async.data = server;
+  server->async_active = true;
 
-  server->ipv4_sockfd = ipv4_sockfd;
-  server->ipv6_sockfd = ipv6_sockfd;
-
-  /* once opened by a uv_tcp_t, the socket is closed by uv_close() */
-  if (ipv4_sockfd != -1) {
-    uv_res = uv_tcp_init(&server->loop, &server->ipv4_listener);
-    if (uv_res != 0) {
-      perror("uv_tcp_init ipv4");
+  if (server->ipv4_sockfd != -1) {
+    if (uv_tcp_init(&server->loop, &server->ipv4_listener) != 0)
       goto err;
-    }
-    server->ipv4_listener.data = server;
     server->ipv4_listener_active = true;
-    uv_res = uv_tcp_open(&server->ipv4_listener, ipv4_sockfd);
-    if (uv_res != 0) {
-      perror("uv_tcp_open ipv4");
+    if (!start_listener(server, &server->ipv4_listener, &server->ipv4_sockfd))
       goto err;
-    }
-    server->ipv4_sockfd = ipv4_sockfd = -1;
-    uv_res = uv_listen((uv_stream_t *)&server->ipv4_listener, backlog, on_listener_connection);
-    if (uv_res != 0) {
-      perror("uv_listen ipv4");
+  }
+  if (server->ipv6_sockfd != -1) {
+    if (uv_tcp_init(&server->loop, &server->ipv6_listener) != 0)
       goto err;
-    }
+    server->ipv6_listener_active = true;
+    if (!start_listener(server, &server->ipv6_listener, &server->ipv6_sockfd))
+      goto err;
   }
 
-  if (ipv6_sockfd != -1) {
-    uv_res = uv_tcp_init(&server->loop, &server->ipv6_listener);
-    if (uv_res != 0) {
-      perror("uv_tcp_init ipv6");
-      goto err;
-    }
-    server->ipv6_listener.data = server;
-    server->ipv6_listener_active = true;
-    uv_res = uv_tcp_open(&server->ipv6_listener, ipv6_sockfd);
-    if (uv_res != 0) {
-      perror("uv_tcp_open ipv6");
-      goto err;
-    }
-    server->ipv6_sockfd = ipv6_sockfd = -1;
-    uv_res = uv_listen((uv_stream_t *)&server->ipv6_listener, backlog, on_listener_connection);
-    if (uv_res != 0) {
-      perror("uv_listen ipv6");
-      goto err;
-    }
-  }
   if (nghttp2_session_callbacks_new(&server->ngcallbacks) != 0)
     goto err;
   server_setup_ngcallbacks(server->ngcallbacks);
 
   server->rbuf_len = 64 * 1024;
-  server->rbuf = malloc(server->rbuf_len);
+  server->rbuf = ezgrpc2_malloc(server->rbuf_len);
   if (server->rbuf == nullptr)
     goto err;
 
-  server->next_deadline_ms = UINT64_MAX;
-
-  server->nb_sessions = server->server_settings.max_connections;
-  server->sessions = calloc(server->nb_sessions, sizeof(*server->sessions));
-  if (server->sessions == nullptr)
-    goto err;
-
-  server->free_sessions = malloc(server->nb_sessions * sizeof(*server->free_sessions));
-  if (server->free_sessions == nullptr)
+  server->nb_sessions = cfg->max_connections;
+  server->sessions = ezgrpc2_calloc(server->nb_sessions, sizeof(*server->sessions));
+  server->free_sessions = ezgrpc2_malloc(server->nb_sessions * sizeof(*server->free_sessions));
+  if (server->sessions == nullptr || server->free_sessions == nullptr)
     goto err;
   /* lowest index on top */
   for (size_t i = 0; i < server->nb_sessions; i++)
     server->free_sessions[i] = server->nb_sessions - 1 - i;
   server->nb_free_sessions = server->nb_sessions;
 
-  server->paths = calloc(server->http2_settings.max_paths, sizeof(*server->paths));
-  if (server->paths == nullptr)
-    goto err;
-
+  if (server->ipv4_addr != nullptr)
+    LOG_INFO(server, "listening on %s:%u%s\n", server->ipv4_addr, cfg->port,
+             server->is_tls ? " (TLS)" : "");
+  if (server->ipv6_addr != nullptr)
+    LOG_INFO(server, "listening on [%s]:%u%s\n", server->ipv6_addr, cfg->port,
+             server->is_tls ? " (TLS)" : "");
   return server;
 
 err:
-  /* sockets not yet handed to a listener */
-  if (ipv4_sockfd != -1 && ipv4_sockfd != server->ipv4_sockfd)
-    close(ipv4_sockfd);
-  if (ipv6_sockfd != -1 && ipv6_sockfd != server->ipv6_sockfd)
-    close(ipv6_sockfd);
   ezgrpc2_server_free(server);
   return nullptr;
 }
 
-static void on_poll_timer(uv_timer_t *handle) {
-  (void)handle;
+EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *server) {
+  if (server == nullptr)
+    return;
+
+  if (server->sessions != nullptr) {
+    /* deliver what the application already queued */
+    server_flush_sessions(server);
+    for (size_t i = 0; i < server->nb_sessions; i++) {
+      if (server->sessions[i].is_active)
+        session_close(&server->sessions[i]);
+    }
+  }
+  /* posted work runs (on calls that are now closed) so that it releases its references */
+  run_posted(server);
+  server_drop_ready(server);
+  server_clear_events(server);
+
+  if (server->ipv4_listener_active)
+    uv_close((uv_handle_t *)&server->ipv4_listener, nullptr);
+  if (server->ipv6_listener_active)
+    uv_close((uv_handle_t *)&server->ipv6_listener, nullptr);
+  if (server->timer_active)
+    uv_close((uv_handle_t *)&server->timer, nullptr);
+  if (server->deadline_timer_active)
+    uv_close((uv_handle_t *)&server->deadline_timer, nullptr);
+  if (server->async_active)
+    uv_close((uv_handle_t *)&server->async, nullptr);
+  if (server->ipv4_sockfd != -1)
+    close(server->ipv4_sockfd);
+  if (server->ipv6_sockfd != -1)
+    close(server->ipv6_sockfd);
+
+  if (server->loop_initialized) {
+    int drain_limit = 1000;
+    while (uv_loop_alive(&server->loop) && drain_limit-- > 0)
+      uv_run(&server->loop, UV_RUN_NOWAIT);
+    uv_loop_close(&server->loop);
+  }
+
+  for (size_t i = 0; i < server->nb_routes; i++) {
+    ezgrpc2_free(server->routes[i]->path);
+    ezgrpc2_free(server->routes[i]);
+  }
+  ezgrpc2_free(server->routes);
+  interceptors_free(server);
+  health_free(server);
+  reflection_free(server);
+  tls_free(server);
+
+  if (server->ngcallbacks != nullptr)
+    nghttp2_session_callbacks_del(server->ngcallbacks);
+  ezgrpc2_free(server->events);
+  ezgrpc2_free(server->rbuf);
+  ezgrpc2_free(server->tls_obuf.data);
+  ezgrpc2_free(server->ipv4_addr);
+  ezgrpc2_free(server->ipv6_addr);
+  ezgrpc2_free(server->sessions);
+  ezgrpc2_free(server->free_sessions);
+  pthread_mutex_destroy(&server->post_mutex);
+  ezgrpc2_free(server);
 }
 
-EZGRPC2_API int ezgrpc2_server_poll(ezgrpc2_server *server, ezgrpc2_events *events, int timeout) {
-  if (server == nullptr)
-    return -1;
+/* ---- running ---------------------------------------------------------------------- */
 
-  server->events = events;
+EZGRPC2_API int ezgrpc2_server_poll(ezgrpc2_server *server, int timeout_ms) {
+  if (server == nullptr)
+    return EZGRPC2_ERR_INVALID;
+
+  server_clear_events(server);
   server->ready_events = 0;
 
-  /* write everything queued since the last poll, one write per session */
+  /* write everything queued since the last poll, one write per connection */
   server_flush_sessions(server);
 
-  if (timeout > 0) {
-    uv_timer_start(&server->timer, on_poll_timer, (uint64_t)timeout, 0);
+  if (timeout_ms > 0) {
+    uv_timer_start(&server->timer, on_poll_timer, (uint64_t)timeout_ms, 0);
     uv_run(&server->loop, UV_RUN_ONCE);
     uv_timer_stop(&server->timer);
-  } else if (timeout == 0) {
+  } else if (timeout_ms == 0) {
     uv_run(&server->loop, UV_RUN_NOWAIT);
   } else {
     uv_run(&server->loop, UV_RUN_ONCE);
   }
 
-  ezgrpc2_server_check_deadlines(server);
+  server_dispatch(server);
+  /* what the handlers answered */
+  server_flush_sessions(server);
+  return (int)server->nb_events;
+}
 
-  return server->ready_events;
+EZGRPC2_API const ezgrpc2_event *ezgrpc2_server_events(ezgrpc2_server *server, size_t *count) {
+  if (server == nullptr) {
+    if (count != nullptr)
+      *count = 0;
+    return nullptr;
+  }
+  if (count != nullptr)
+    *count = server->nb_events;
+  return server->events;
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_run(ezgrpc2_server *server) {
+  if (server == nullptr)
+    return EZGRPC2_ERR_INVALID;
+  while (!atomic_load(&server->stop)) {
+    int res = ezgrpc2_server_poll(server, -1);
+    if (res < 0)
+      return (ezgrpc2_err)res;
+  }
+  /* the server can be run again */
+  atomic_store(&server->stop, false);
+  return EZGRPC2_OK;
+}
+
+EZGRPC2_API void ezgrpc2_server_stop(ezgrpc2_server *server) {
+  if (server == nullptr)
+    return;
+  atomic_store(&server->stop, true);
+  /* async-signal-safe */
+  uv_async_send(&server->async);
+}
+
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_post(ezgrpc2_server *server, void (*fn)(void *arg),
+                                            void *arg) {
+  if (server == nullptr || fn == nullptr)
+    return EZGRPC2_ERR_INVALID;
+  post_task *task = ezgrpc2_malloc(sizeof(*task));
+  if (task == nullptr)
+    return EZGRPC2_ERR_NOMEM;
+  *task = (post_task){.fn = fn, .arg = arg};
+
+  pthread_mutex_lock(&server->post_mutex);
+  if (server->post_tail != nullptr)
+    server->post_tail->next = task;
+  else
+    server->post_head = task;
+  server->post_tail = task;
+  pthread_mutex_unlock(&server->post_mutex);
+
+  uv_async_send(&server->async);
+  return EZGRPC2_OK;
 }
 
 EZGRPC2_API void ezgrpc2_server_flush(ezgrpc2_server *server) {
@@ -309,152 +479,34 @@ EZGRPC2_API void ezgrpc2_server_flush(ezgrpc2_server *server) {
     server_flush_sessions(server);
 }
 
-EZGRPC2_API ezgrpc2_event *ezgrpc2_server_events_read([[maybe_unused]] ezgrpc2_server *server) {
-  return nullptr;
-}
-
-EZGRPC2_API int ezgrpc2_server_events_poll(ezgrpc2_server *server, int timeout) {
-  return ezgrpc2_server_poll(server, nullptr, timeout);
-}
-
-EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path,
-                                             void *userdata, uint64_t accept_content_type,
-                                             uint64_t accept_content_encoding) {
-  if (server->nb_paths + 1 > server->http2_settings.max_paths)
-    return 1;
-  strncpy(server->paths[server->nb_paths].path, path,
-          sizeof(server->paths[server->nb_paths].path) - 1);
-  server->paths[server->nb_paths].path[sizeof(server->paths[server->nb_paths].path) - 1] = '\0';
-  server->paths[server->nb_paths].userdata = userdata;
-  server->paths[server->nb_paths].accept_content_type = accept_content_type;
-  server->paths[server->nb_paths].accept_content_encoding = accept_content_encoding;
-  server->nb_paths++;
-  return 0;
-}
-
-EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, const char *path) {
-  for (size_t i = 0; i < server->http2_settings.max_paths; i++) {
-    if (server->paths[i].path[0] && !strcmp(path, server->paths[i].path)) {
-      void *userdata = server->paths[i].userdata;
-      memset(&server->paths[i], 0, sizeof(ezgrpc2_path));
-      server->nb_paths--;
-      return userdata;
-    }
-  }
-  return nullptr;
-}
-
-EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *ezserver) {
-  if (ezserver == nullptr)
-    return;
-
-  if (ezserver->ipv4_listener_active) {
-    uv_close((uv_handle_t *)&ezserver->ipv4_listener, nullptr);
-    ezserver->ipv4_listener_active = false;
-  }
-  if (ezserver->ipv6_listener_active) {
-    uv_close((uv_handle_t *)&ezserver->ipv6_listener, nullptr);
-    ezserver->ipv6_listener_active = false;
-  }
-  if (ezserver->timer_active) {
-    uv_timer_stop(&ezserver->timer);
-    uv_close((uv_handle_t *)&ezserver->timer, nullptr);
-    ezserver->timer_active = false;
-  }
-
-  if (ezserver->ipv4_sockfd != -1) {
-    close(ezserver->ipv4_sockfd);
-    ezserver->ipv4_sockfd = -1;
-  }
-  if (ezserver->ipv6_sockfd != -1) {
-    close(ezserver->ipv6_sockfd);
-    ezserver->ipv6_sockfd = -1;
-  }
-
-  /* nobody polls a freed server, and the application may have freed
-   * its events already, so the DISCONNECT events below are not written */
-  ezserver->events = nullptr;
-
-  if (ezserver->sessions != nullptr) {
-    /* deliver what the application already queued */
-    server_flush_sessions(ezserver);
-    for (size_t i = 0; i < ezserver->nb_sessions; i++) {
-      if (ezserver->sessions[i].is_active) {
-        session_close(&ezserver->sessions[i]);
-      }
-    }
-  }
-
-  if (ezserver->loop_initialized) {
-    int drain_limit = 1000;
-    while (uv_loop_alive(&ezserver->loop) && drain_limit-- > 0) {
-      uv_run(&ezserver->loop, UV_RUN_NOWAIT);
-    }
-    uv_loop_close(&ezserver->loop);
-    ezserver->loop_initialized = false;
-  }
-
-  if (ezserver->ngcallbacks != nullptr)
-    nghttp2_session_callbacks_del(ezserver->ngcallbacks);
-  free(ezserver->rbuf);
-  free(ezserver->tls_obuf.data);
-  free(ezserver->paths);
-  free(ezserver->ipv4_addr);
-  free(ezserver->ipv6_addr);
-  free(ezserver->sessions);
-  free(ezserver->free_sessions);
-  free(ezserver->interceptors);
-  ezgrpc2_tls_free_server_ctx(ezserver->tls_ctx);
-  ezserver->tls_ctx = nullptr;
-  thpool_cleanup(&ezserver->logger_thread);
-  free(ezserver);
-}
-
-typedef struct log_t log_t;
-struct log_t {
-  char *str;
-  FILE *fp;
-};
-
-static log_t *log_new(char *str, FILE *fp) {
-  log_t *r = malloc(sizeof(*r));
-  assert(r != nullptr);
-  r->str = str;
-  r->fp = fp;
-  return r;
-}
-
-static void log_free(void *userdata) {
-  log_t *r = userdata;
-  free(r->str);
-  free(r);
-}
-
-static void logger(void *userdata) {
-  log_t *l = userdata;
-  char dt[128] = {};
-  fprintf(l->fp, "[%s] ", ezgetdt(dt, sizeof(dt)));
-  fwrite(l->str, 1, strlen(l->str), l->fp);
-  log_free(l);
-}
-
-void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level, const char *fmt, ...) {
-  if (!(log_level & EZGRPC2_SERVER_LOG_NORMAL || log_level & server->server_settings.logging_level))
-    return;
-  va_list ap;
-  va_start(ap, fmt);
-  char *buf = malloc(1024);
-  assert(buf != nullptr);
-  vsnprintf(buf, 1024, fmt, ap);
-  log_t *l = log_new(buf, server->server_settings.logging_fp);
-  thpool_add_task(&server->logger_thread, logger, l, log_free);
-  va_end(ap);
-}
-
-EZGRPC2_API ezgrpc2_server_settings *ezgrpc2_server_get_server_settings(ezgrpc2_server *server) {
-  return server ? &server->server_settings : nullptr;
-}
-
-EZGRPC2_API ezgrpc2_http2_settings *ezgrpc2_server_get_http2_settings(ezgrpc2_server *server) {
-  return server ? &server->http2_settings : nullptr;
+EZGRPC2_API const char *ezgrpc2_license(void) {
+  static const char *license =
+      "ezgrpc2 - A grpc server without the extra fancy features.\n"
+      "https://github.com/mnyoshie/ezgrpc2\n"
+      "\n"
+      "Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari\n"
+      "\n"
+      "Redistribution and use in source and binary forms, with or without\n"
+      "modification, are permitted provided that the following conditions\n"
+      "are met:\n"
+      "\n"
+      "  1. Redistributions of source code must retain the above copyright notice,\n"
+      "  this list of conditions and the following disclaimer.\n"
+      "\n"
+      "  2. Neither the name of the copyright holder nor the names of its\n"
+      "  contributors may be used to endorse or promote products derived from\n"
+      "  this software without specific prior written permission.\n"
+      "\n"
+      "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
+      "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
+      "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
+      "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
+      "HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
+      "SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED\n"
+      "TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR\n"
+      "PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF\n"
+      "LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING\n"
+      "NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
+      "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
+  return license;
 }

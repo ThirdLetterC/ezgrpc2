@@ -28,19 +28,17 @@ EZGRPC2_API ProtobufCMessage *ezgrpc2_pb_unpack(const ProtobufCMessageDescriptor
                                    message->data);
 }
 
-EZGRPC2_API ezgrpc2_message *ezgrpc2_pb_pack(const ProtobufCMessage *message,
-                                             uint8_t compressed_flag) {
+EZGRPC2_API ezgrpc2_message *ezgrpc2_pb_pack(const ProtobufCMessage *message) {
   if (message == nullptr) {
     return nullptr;
   }
 
   size_t packed_size = protobuf_c_message_get_packed_size(message);
-  ezgrpc2_message *msg = ezgrpc2_message_new2(packed_size);
+  ezgrpc2_message *msg = ezgrpc2_message_alloc(packed_size);
   if (msg == nullptr) {
     return nullptr;
   }
 
-  msg->cflag = compressed_flag;
   size_t written = protobuf_c_message_pack(message, msg->data);
   if (written != packed_size) {
     ezgrpc2_message_free(msg);
@@ -56,22 +54,13 @@ EZGRPC2_API void ezgrpc2_pb_free_unpacked(ProtobufCMessage *message) {
   }
 }
 
-EZGRPC2_API ezgrpc2_messages *ezgrpc2_pb_create_response(const ProtobufCMessage *message) {
-  if (message == nullptr) {
-    return nullptr;
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_pb(ezgrpc2_call *call, const ProtobufCMessage *message) {
+  if (call == nullptr || message == nullptr) {
+    return EZGRPC2_ERR_INVALID;
   }
-
-  ezgrpc2_message *msg = ezgrpc2_pb_pack(message, 0);
+  ezgrpc2_message *msg = ezgrpc2_pb_pack(message);
   if (msg == nullptr) {
-    return nullptr;
+    return EZGRPC2_ERR_NOMEM;
   }
-
-  ezgrpc2_messages *msgs = ezgrpc2_messages_new(nullptr);
-  if (msgs == nullptr) {
-    ezgrpc2_message_free(msg);
-    return nullptr;
-  }
-
-  ezgrpc2_messages_push(msgs, msg);
-  return msgs;
+  return ezgrpc2_call_send(call, msg);
 }

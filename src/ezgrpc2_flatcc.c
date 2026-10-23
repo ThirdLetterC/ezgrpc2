@@ -51,11 +51,13 @@ static int fb_alloc([[maybe_unused]] void *alloc_context, flatcc_iovec_t *b, siz
   return 0;
 }
 
-EZGRPC2_API int ezgrpc2_fb_builder_init(flatcc_builder_t *builder) {
+EZGRPC2_API ezgrpc2_err ezgrpc2_fb_builder_init(flatcc_builder_t *builder) {
   if (builder == nullptr) {
-    return 1;
+    return EZGRPC2_ERR_INVALID;
   }
-  return flatcc_builder_custom_init(builder, nullptr, nullptr, fb_alloc, nullptr);
+  return flatcc_builder_custom_init(builder, nullptr, nullptr, fb_alloc, nullptr) == 0
+             ? EZGRPC2_OK
+             : EZGRPC2_ERR_NOMEM;
 }
 
 EZGRPC2_API int ezgrpc2_fb_verify(const ezgrpc2_message *message, const char *fid,
@@ -78,7 +80,7 @@ EZGRPC2_API const void *ezgrpc2_fb_unpack(const ezgrpc2_message *message, const 
   return p + root;
 }
 
-EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder, uint8_t compressed_flag) {
+EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder) {
   if (builder == nullptr) {
     return nullptr;
   }
@@ -88,11 +90,10 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder, uint8_t 
     return nullptr;
   }
 
-  ezgrpc2_message *msg = ezgrpc2_message_new2(size);
+  ezgrpc2_message *msg = ezgrpc2_message_alloc(size);
   if (msg == nullptr) {
     return nullptr;
   }
-  msg->cflag = compressed_flag;
   if (flatcc_builder_copy_buffer(builder, msg->data, size) == nullptr) {
     ezgrpc2_message_free(msg);
     return nullptr;
@@ -102,18 +103,13 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder, uint8_t 
   return msg;
 }
 
-EZGRPC2_API ezgrpc2_messages *ezgrpc2_fb_create_response(flatcc_builder_t *builder) {
-  ezgrpc2_message *msg = ezgrpc2_fb_pack(builder, 0);
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_fb(ezgrpc2_call *call, flatcc_builder_t *builder) {
+  if (call == nullptr || builder == nullptr) {
+    return EZGRPC2_ERR_INVALID;
+  }
+  ezgrpc2_message *msg = ezgrpc2_fb_pack(builder);
   if (msg == nullptr) {
-    return nullptr;
+    return flatcc_builder_get_buffer_size(builder) == 0 ? EZGRPC2_ERR_INVALID : EZGRPC2_ERR_NOMEM;
   }
-
-  ezgrpc2_messages *msgs = ezgrpc2_messages_new(nullptr);
-  if (msgs == nullptr) {
-    ezgrpc2_message_free(msg);
-    return nullptr;
-  }
-
-  ezgrpc2_messages_push(msgs, msg);
-  return msgs;
+  return ezgrpc2_call_send(call, msg);
 }

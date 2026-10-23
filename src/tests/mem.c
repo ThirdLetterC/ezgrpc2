@@ -17,10 +17,8 @@ void test_allocator_name(void) {
   TEST_ASSERT_EQUAL_STRING("mimalloc", name);
 #elif defined(EZGRPC2_USE_JEMALLOC)
   TEST_ASSERT_EQUAL_STRING("jemalloc", name);
-#elif defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
-  TEST_ASSERT_EQUAL_STRING("custom", name);
 #else
-  TEST_ASSERT_EQUAL_STRING("default (libc)", name);
+  TEST_ASSERT_EQUAL_STRING("libc", name);
 #endif
 }
 

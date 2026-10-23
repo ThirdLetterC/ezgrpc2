@@ -1,23 +1,42 @@
 #ifndef EZGRPC2_MESSAGE_H
 #define EZGRPC2_MESSAGE_H
-#include "defs.h"
-#include <stddef.h>
-#include <stdint.h>
+
+#include "ezgrpc2_defs.h"
+
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L
+#include <stdalign.h>
+#endif
 
 typedef struct ezgrpc2_message ezgrpc2_message;
+
 /**
- * A gRPC message
+ * A gRPC message: one serialized request or response.
  */
 struct ezgrpc2_message {
+  /** Length of ``data`` in bytes. */
   uint32_t len;
+  /** 1 if ``data`` is compressed (the gRPC Compressed-Flag), otherwise 0. */
   uint8_t cflag;
-  /* aligned like malloc() memory, so serialization formats that are read in
-   * place (FlatBuffers) can use the payload directly */
+  /** The payload, aligned like ``malloc()`` memory, so formats that are read
+   * in place (FlatBuffers) can use it directly. */
   alignas(max_align_t) uint8_t data[];
 };
 
-EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new(uint8_t compressed_flag, void *data,
-                                                 size_t data_len);
-ezgrpc2_message *ezgrpc2_message_new2(size_t data_len);
+/**
+ * Creates a message holding a copy of ``data``.
+ * Returns nullptr when out of memory.
+ */
+EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new(const void *data, size_t len);
+
+/**
+ * Creates a message with ``len`` uninitialized bytes, for serializing in place.
+ * Returns nullptr when out of memory.
+ */
+EZGRPC2_API ezgrpc2_message *ezgrpc2_message_alloc(size_t len);
+
+/**
+ * Frees a message. Accepts nullptr.
+ */
 EZGRPC2_API void ezgrpc2_message_free(ezgrpc2_message *message);
-#endif
+
+#endif /* EZGRPC2_MESSAGE_H */

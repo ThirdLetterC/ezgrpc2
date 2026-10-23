@@ -4,6 +4,7 @@
  */
 #include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "ezgrpc2.h"
@@ -12,28 +13,22 @@
 
 #define MAX_REPLIES 100
 
-static volatile sig_atomic_t g_running = 1;
+static ezgrpc2_server *g_server;
 static int g_quiet = 0;
 
 static void sig_handler([[maybe_unused]] int sig) {
-  g_running = 0;
+  ezgrpc2_server_stop(g_server);
 }
 
-/* builds every response. ezgrpc2_fb_pack() resets it after each one */
+/* builds every response. ezgrpc2_call_send_fb() resets it after each one */
 static flatcc_builder_t g_builder;
 
-typedef void (*handler_fn)(ezgrpc2_server *server, ezgrpc2_event *event,
-                           greeter_HelloRequest_table_t req);
-
-static void reply(ezgrpc2_server *server, ezgrpc2_event *event, const char *text, int32_t index) {
+static void reply(ezgrpc2_call *call, const char *text, int32_t index) {
   greeter_HelloReply_start_as_root(&g_builder);
   greeter_HelloReply_message_create_str(&g_builder, text);
   greeter_HelloReply_index_add(&g_builder, index);
   greeter_HelloReply_end_as_root(&g_builder);
-
-  ezgrpc2_messages *res = ezgrpc2_fb_create_response(&g_builder);
-  ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res);
-  ezgrpc2_messages_free(res);
+  ezgrpc2_call_send_fb(call, &g_builder);
 }
 
 static const char *request_name(greeter_HelloRequest_table_t req) {
@@ -41,27 +36,40 @@ static const char *request_name(greeter_HelloRequest_table_t req) {
   return name != nullptr && name[0] != '\0' ? name : "World";
 }
 
+/* verifies the request; the table points into it and lives as long as the call */
+static greeter_HelloRequest_table_t read_request(ezgrpc2_call *call,
+                                                 const ezgrpc2_message *request) {
+  greeter_HelloRequest_table_t req = EZGRPC2_FB_UNPACK(greeter_HelloRequest, request);
+  if (req == nullptr)
+    ezgrpc2_call_finish(call, EZGRPC2_STATUS_INVALID_ARGUMENT,
+                        "request is not a valid greeter.HelloRequest");
+  return req;
+}
+
 /* SayHello (unary) */
-static void say_hello(ezgrpc2_server *server, ezgrpc2_event *event,
-                      greeter_HelloRequest_table_t req) {
-  char text[256];
-  snprintf(text, sizeof(text), "Hello, %s!", request_name(req));
+static void say_hello(ezgrpc2_call *call, const ezgrpc2_message *request,
+                      [[maybe_unused]] void *userdata) {
+  greeter_HelloRequest_table_t req = read_request(call, request);
+  if (req == nullptr)
+    return;
   if (!g_quiet)
     printf("[server] SayHello name='%s'\n", request_name(req));
 
-  reply(server, event, text, 0);
-  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                    EZGRPC2_GRPC_STATUS_OK);
+  char text[256];
+  snprintf(text, sizeof(text), "Hello, %s!", request_name(req));
+  reply(call, text, 0);
+  ezgrpc2_call_finish(call, EZGRPC2_STATUS_OK, nullptr);
 }
 
 /* SayManyHellos (server streaming) */
-static void say_many_hellos(ezgrpc2_server *server, ezgrpc2_event *event,
-                            greeter_HelloRequest_table_t req) {
+static void say_many_hellos(ezgrpc2_call *call, const ezgrpc2_message *request,
+                            [[maybe_unused]] void *userdata) {
+  greeter_HelloRequest_table_t req = read_request(call, request);
+  if (req == nullptr)
+    return;
   int32_t count = greeter_HelloRequest_count(req);
   if (count < 0 || count > MAX_REPLIES) {
-    ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
-                                       EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT,
-                                       "count must be between 0 and 100", nullptr, 0);
+    ezgrpc2_call_finish(call, EZGRPC2_STATUS_INVALID_ARGUMENT, "count must be between 0 and 100");
     return;
   }
   if (!g_quiet)
@@ -70,93 +78,40 @@ static void say_many_hellos(ezgrpc2_server *server, ezgrpc2_event *event,
   for (int32_t i = 0; i < count; i++) {
     char text[256];
     snprintf(text, sizeof(text), "Hello #%d, %s!", i, request_name(req));
-    reply(server, event, text, i);
+    reply(call, text, i);
   }
-  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
-                                    EZGRPC2_GRPC_STATUS_OK);
-}
-
-static void handle_message(ezgrpc2_server *server, ezgrpc2_event *event) {
-  handler_fn handler = *(handler_fn *)event->userdata;
-
-  /* both methods take a single request. it may arrive in an event of its own,
-   * followed by an empty one that only carries end_stream */
-  size_t nb_messages = ezgrpc2_messages_count(event->message.messages);
-  if (nb_messages == 0)
-    return;
-  if (nb_messages > 1) {
-    ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
-                                       EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT,
-                                       "expected exactly one request message", nullptr, 0);
-    return;
-  }
-
-  /* the table points into the message: keep the message until done */
-  ezgrpc2_message *msg = ezgrpc2_messages_peek_front(event->message.messages);
-  greeter_HelloRequest_table_t req = EZGRPC2_FB_UNPACK(greeter_HelloRequest, msg);
-  if (req == nullptr) {
-    ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
-                                       EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT,
-                                       "request is not a valid greeter.HelloRequest", nullptr, 0);
-    return;
-  }
-  handler(server, event, req);
+  ezgrpc2_call_finish(call, EZGRPC2_STATUS_OK, nullptr);
 }
 
 int main(int argc, char *argv[]) {
   int port = argc > 1 ? atoi(argv[1]) : 19029;
   g_quiet = argc > 2 ? atoi(argv[2]) : 0;
-
-  signal(SIGPIPE, SIG_IGN);
-  signal(SIGINT, sig_handler);
-  signal(SIGTERM, sig_handler);
   setvbuf(stdout, nullptr, _IONBF, 0);
 
-  ezgrpc2_global_init(0);
-  if (ezgrpc2_fb_builder_init(&g_builder) != 0)
+  if (ezgrpc2_fb_builder_init(&g_builder) != EZGRPC2_OK)
     return 1;
 
-  ezgrpc2_server *server =
-      ezgrpc2_server_new("0.0.0.0", (uint16_t)port, "::", (uint16_t)port, 1024, nullptr, nullptr);
-  if (server == nullptr) {
+  g_server = ezgrpc2_server_new(&(ezgrpc2_config){
+      .port = (uint16_t)port,
+      .log_level = g_quiet ? EZGRPC2_LOG_WARNING : EZGRPC2_LOG_INFO,
+  });
+  if (g_server == nullptr) {
     fprintf(stderr, "Failed to create server on port %d\n", port);
     return 1;
   }
 
-  static handler_fn say_hello_handler = say_hello;
-  static handler_fn say_many_hellos_handler = say_many_hellos;
-  ezgrpc2_server_register_path(server, "/greeter.Greeter/SayHello", &say_hello_handler, 0, 0);
-  ezgrpc2_server_register_path(server, "/greeter.Greeter/SayManyHellos", &say_many_hellos_handler,
-                               0, 0);
+  ezgrpc2_server_handle(g_server, "/greeter.Greeter/SayHello", say_hello, nullptr);
+  ezgrpc2_server_handle(g_server, "/greeter.Greeter/SayManyHellos", say_many_hellos, nullptr);
   printf("[server] FlatBuffers Greeter listening on port %d\n", port);
 
-  ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
-  while (g_running) {
-    if (ezgrpc2_server_poll(server, events, 500) < 0)
-      break;
+  signal(SIGPIPE, SIG_IGN);
+  signal(SIGINT, sig_handler);
+  signal(SIGTERM, sig_handler);
 
-    ezgrpc2_event *block;
-    size_t count;
-    while ((block = ezgrpc2_events_read(events, &count)) != nullptr) {
-      for (size_t i = 0; i < count; i++) {
-        ezgrpc2_event *event = &block[i];
-        if (event->type == EZGRPC2_EVENT_MESSAGE) {
-          handle_message(server, event);
-          /* the application owns the received messages */
-          ezgrpc2_messages_free(event->message.messages);
-        } else if (event->type == EZGRPC2_EVENT_DATALOSS) {
-          ezgrpc2_server_session_stream_end(server, event->session_uuid, event->dataloss.stream_id,
-                                            EZGRPC2_GRPC_STATUS_DATA_LOSS);
-        }
-      }
-      ezgrpc2_free(block);
-    }
-  }
+  ezgrpc2_server_run(g_server);
 
   printf("[server] Shutting down...\n");
-  ezgrpc2_events_free(events);
-  ezgrpc2_server_free(server);
+  ezgrpc2_server_free(g_server);
   flatcc_builder_clear(&g_builder);
-  ezgrpc2_global_cleanup();
   return 0;
 }

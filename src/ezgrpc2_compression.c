@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include "core.h"
 #include "ezgrpc2_compression.h"
 #include "ezgrpc2_mem.h"
 
@@ -117,7 +118,7 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_message_compress_gzip(const ezgrpc2_message
   if (ezgrpc2_compress_gzip(msg->data, msg->len, &compressed_data, &compressed_len) != 0) {
     return nullptr;
   }
-  ezgrpc2_message *res = ezgrpc2_message_new(1, compressed_data, compressed_len);
+  ezgrpc2_message *res = message_create(1, compressed_data, compressed_len);
   ezgrpc2_free(compressed_data);
   return res;
 }
@@ -127,14 +128,14 @@ EZGRPC2_API ezgrpc2_message *ezgrpc2_message_decompress_gzip(const ezgrpc2_messa
     return nullptr;
   }
   if (msg->cflag == 0) {
-    return ezgrpc2_message_new(0, (void *)msg->data, msg->len);
+    return message_create(0, msg->data, msg->len);
   }
   uint8_t *decompressed_data = nullptr;
   size_t decompressed_len = 0;
   if (ezgrpc2_decompress_gzip(msg->data, msg->len, &decompressed_data, &decompressed_len) != 0) {
     return nullptr;
   }
-  ezgrpc2_message *res = ezgrpc2_message_new(0, decompressed_data, decompressed_len);
+  ezgrpc2_message *res = message_create(0, decompressed_data, decompressed_len);
   ezgrpc2_free(decompressed_data);
   return res;
 }

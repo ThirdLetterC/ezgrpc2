@@ -17,7 +17,7 @@ release = '0.0.0'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ['sphinx_c_autodoc']
-c_autodoc_roots = ['../..']
+c_autodoc_roots = ['../../include']
 
 templates_path = ['_templates']
 exclude_patterns = []

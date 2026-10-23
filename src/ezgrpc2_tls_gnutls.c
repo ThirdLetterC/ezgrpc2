@@ -48,7 +48,7 @@ static ssize_t io_push(gnutls_transport_ptr_t ptr, const void *buf, size_t len) 
 }
 
 ezgrpc2_tls_ctx *tls_backend_ctx_new(const char *cert_file, const char *key_file) {
-  ezgrpc2_tls_ctx *ctx = calloc(1, sizeof(*ctx));
+  ezgrpc2_tls_ctx *ctx = ezgrpc2_calloc(1, sizeof(*ctx));
   if (ctx == nullptr) {
     return nullptr;
   }
@@ -69,7 +69,7 @@ void tls_backend_ctx_free(ezgrpc2_tls_ctx *ctx) {
     gnutls_priority_deinit(ctx->priority);
   if (ctx->cred != nullptr)
     gnutls_certificate_free_credentials(ctx->cred);
-  free(ctx);
+  ezgrpc2_free(ctx);
 }
 
 void *tls_backend_ctx_native(ezgrpc2_tls_ctx *ctx) {
@@ -77,12 +77,12 @@ void *tls_backend_ctx_native(ezgrpc2_tls_ctx *ctx) {
 }
 
 ezgrpc2_tls_session *tls_backend_session_new(ezgrpc2_tls_ctx *ctx) {
-  ezgrpc2_tls_session *tls = calloc(1, sizeof(*tls));
+  ezgrpc2_tls_session *tls = ezgrpc2_calloc(1, sizeof(*tls));
   if (tls == nullptr) {
     return nullptr;
   }
   if (gnutls_init(&tls->session, GNUTLS_SERVER | GNUTLS_NONBLOCK) < 0) {
-    free(tls);
+    ezgrpc2_free(tls);
     return nullptr;
   }
 
@@ -104,7 +104,7 @@ ezgrpc2_tls_session *tls_backend_session_new(ezgrpc2_tls_ctx *ctx) {
 void tls_backend_session_free(ezgrpc2_tls_session *tls) {
   gnutls_deinit(tls->session);
   tls_io_free(&tls->io);
-  free(tls);
+  ezgrpc2_free(tls);
 }
 
 int tls_backend_feed(ezgrpc2_tls_session *tls, const void *buf, size_t len) {

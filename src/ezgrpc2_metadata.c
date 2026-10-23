@@ -1,15 +1,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <nghttp2/nghttp2.h>
 #include "ezgrpc2_metadata.h"
 #include "ezgrpc2_mem.h"
 #include "core.h"
-#include "internal_helpers.h"
 
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-char *ezgrpc2_metadata_encode_bin(const uint8_t *data, size_t in_len, size_t *out_len) {
+EZGRPC2_API char *ezgrpc2_metadata_encode_bin(const uint8_t *data, size_t in_len, size_t *out_len) {
   if (data == nullptr) {
     return nullptr;
   }
@@ -55,7 +53,8 @@ static inline int b64_char_val(char c) {
   return -1;
 }
 
-uint8_t *ezgrpc2_metadata_decode_bin(const char *base64_str, size_t in_len, size_t *out_len) {
+EZGRPC2_API uint8_t *ezgrpc2_metadata_decode_bin(const char *base64_str, size_t in_len,
+                                                 size_t *out_len) {
   if (base64_str == nullptr) {
     return nullptr;
   }
@@ -99,90 +98,4 @@ uint8_t *ezgrpc2_metadata_decode_bin(const char *base64_str, size_t in_len, size
     *out_len = j;
   }
   return out;
-}
-
-static ezgrpc2_stream *find_stream(ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid,
-                                   int32_t stream_id) {
-  if (server == nullptr)
-    return nullptr;
-  ezgrpc2_session *session = session_find(server->sessions, server->nb_sessions, session_uuid);
-  if (session == nullptr || session->ngsession == nullptr)
-    return nullptr;
-  return (ezgrpc2_stream *)nghttp2_session_get_stream_user_data(session->ngsession, stream_id);
-}
-
-EZGRPC2_API const char *ezgrpc2_metadata_get(ezgrpc2_server *server,
-                                             ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-                                             const char *key, size_t *value_len) {
-  if (key == nullptr)
-    return nullptr;
-  ezgrpc2_stream *stream = find_stream(server, session_uuid, stream_id);
-  if (stream == nullptr)
-    return nullptr;
-
-  size_t klen = strlen(key);
-  for (size_t i = 0; i < stream->nb_headers; i++) {
-    if (stream->headers[i].namelen == klen &&
-        strncasecmp(stream->headers[i].name, key, klen) == 0) {
-      if (value_len != nullptr) {
-        *value_len = stream->headers[i].valuelen;
-      }
-      return stream->headers[i].value;
-    }
-  }
-  return nullptr;
-}
-
-EZGRPC2_API size_t ezgrpc2_metadata_count(ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid,
-                                          int32_t stream_id) {
-  ezgrpc2_stream *stream = find_stream(server, session_uuid, stream_id);
-  return stream ? stream->nb_headers : 0;
-}
-
-EZGRPC2_API int ezgrpc2_metadata_get_at(ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid,
-                                        int32_t stream_id, size_t idx,
-                                        ezgrpc2_metadata_entry *out_entry) {
-  if (out_entry == nullptr)
-    return 1;
-  ezgrpc2_stream *stream = find_stream(server, session_uuid, stream_id);
-  if (stream == nullptr || idx >= stream->nb_headers)
-    return 1;
-
-  out_entry->key = stream->headers[idx].name;
-  out_entry->key_len = stream->headers[idx].namelen;
-  out_entry->value = stream->headers[idx].value;
-  out_entry->value_len = stream->headers[idx].valuelen;
-  return 0;
-}
-
-EZGRPC2_API int ezgrpc2_server_session_stream_send_initial_metadata(
-    ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-    const ezgrpc2_metadata_entry *entries, size_t count) {
-  if (server == nullptr || entries == nullptr || count == 0)
-    return 1;
-  ezgrpc2_session *session = session_find(server->sessions, server->nb_sessions, session_uuid);
-  if (session == nullptr || session->ngsession == nullptr)
-    return 1;
-
-  nghttp2_nv *nva = ezgrpc2_malloc(count * sizeof(nghttp2_nv));
-  if (nva == nullptr)
-    return 1;
-
-  for (size_t i = 0; i < count; i++) {
-    nva[i] = (nghttp2_nv){
-        .name = (uint8_t *)entries[i].key,
-        .value = (uint8_t *)entries[i].value,
-        .namelen = entries[i].key_len ? entries[i].key_len : strlen(entries[i].key),
-        .valuelen = entries[i].value_len ? entries[i].value_len : strlen(entries[i].value),
-        .flags = NGHTTP2_NV_FLAG_NONE,
-    };
-  }
-
-  int res = nghttp2_submit_headers(session->ngsession, 0, stream_id, nullptr, nva, count, nullptr);
-  ezgrpc2_free(nva);
-  if (res != 0)
-    return 1;
-
-  session_schedule_flush(session);
-  return 0;
 }

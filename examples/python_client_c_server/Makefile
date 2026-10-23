@@ -1,9 +1,8 @@
 -include ../../config.mk
 
 CFLAGS += -I../../include
-LDFLAGS += -L../../src -l:libezgrpc2.a -lnghttp2 -lz $(TLS_LIBS) -lpthread -lprotobuf-c -luv
+LDFLAGS += -L../../src -l:libezgrpc2.a $(EZGRPC2_DEPS) -lprotobuf-c
 
-LDFLAGS += -luuid
 
 PROTOC_C ?= protoc-c
 PYTHON ?= python3

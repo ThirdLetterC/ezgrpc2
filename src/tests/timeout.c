@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include "ezgrpc2.h"
+#include "ezgrpc2_timeout.h"
 #include "unity.h"
 
 void setUp(void) {}

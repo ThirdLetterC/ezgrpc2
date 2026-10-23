@@ -1,92 +1,32 @@
 #ifndef EZGRPC2_EVENT_H
 #define EZGRPC2_EVENT_H
 
-#include <stdint.h>
-#include "defs.h"
-#include "ezgrpc2_messages.h"
-#include "ezgrpc2_session_uuid.h"
-
-typedef struct ezgrpc2_event_cancel ezgrpc2_event_cancel;
-typedef struct ezgrpc2_event_message ezgrpc2_event_message;
-typedef struct ezgrpc2_event_dataloss ezgrpc2_event_dataloss;
-typedef struct ezgrpc2_event ezgrpc2_event;
+#include "ezgrpc2_call.h"
+#include "ezgrpc2_defs.h"
+#include "ezgrpc2_message.h"
 
 /**
- * Types of events
+ * Events of the methods registered with ezgrpc2_server_register_path(), read
+ * with ezgrpc2_server_events() after ezgrpc2_server_poll(). Methods registered
+ * with a handler are dispatched to it instead.
  */
-enum ezgrpc2_event_type {
-  EZGRPC2_EVENT_CONNECT,
-  EZGRPC2_EVENT_DISCONNECT,
+typedef enum ezgrpc2_event_type {
+  /** A request message arrived: ``message`` is set. */
   EZGRPC2_EVENT_MESSAGE,
+  /** The client finished sending (half-close). */
+  EZGRPC2_EVENT_END,
+  /** The call was cancelled; see ezgrpc2_call_cancel_reason(). */
   EZGRPC2_EVENT_CANCEL,
-  EZGRPC2_EVENT_DATALOSS,
-  EZGRPC2_EVENT_TIMEOUT
-};
-typedef enum ezgrpc2_event_type ezgrpc2_event_type;
+} ezgrpc2_event_type;
 
-/**
- *
- */
-struct ezgrpc2_event_cancel {
-  int32_t stream_id;
-};
-
-struct ezgrpc2_event_timeout {
-  int32_t stream_id;
-};
-typedef struct ezgrpc2_event_timeout ezgrpc2_event_timeout;
-
-/**
- *
- */
-struct ezgrpc2_event_message {
-  /* Cast the return of :c:func:`ezgrpc2_list_popb` to a pointer to
-   * :c:struct:`ezgrpc2_message`
-   * */
-  ezgrpc2_messages *messages;
-  int32_t stream_id;
-  char end_stream;
-};
-
-/**
- *
- */
-struct ezgrpc2_event_dataloss {
-  /* cast ezgrpc2_list_popb to ``ezgrpc2_message *`` */
-  int32_t stream_id;
-};
-
-/**
- * This is the events stored in :c:member:`ezgrpc2_path.levents`.
- */
-struct ezgrpc2_event {
-  ezgrpc2_session_uuid session_uuid;
-  /**
-   * Anonymous union
-   */
-  union {
-    /**
-     * When :c:member:`ezgrpc2_event.type` is :c:enumerator:`EZGRPC2_EVENT_MESSAGE`.
-     */
-    ezgrpc2_event_message message;
-    /**
-     * When :c:member:`ezgrpc2_event.type` is :c:enumerator:`EZGRPC2_EVENT_DATALOSS`.
-     */
-    ezgrpc2_event_dataloss dataloss;
-    /**
-     * When :c:member:`ezgrpc2_event.type` is :c:enumerator:`EZGRPC2_EVENT_CANCEL`.
-     */
-    ezgrpc2_event_cancel cancel;
-    /**
-     * When :c:member:`ezgrpc2_event.type` is :c:enumerator:`EZGRPC2_EVENT_TIMEOUT`.
-     */
-    ezgrpc2_event_timeout timeout;
-  };
-  void *userdata;
-
+typedef struct ezgrpc2_event {
   ezgrpc2_event_type type;
-};
+  /** The call. Valid until the next poll. */
+  ezgrpc2_call *call;
+  /** EZGRPC2_EVENT_MESSAGE: the message. Valid until the next poll. */
+  const ezgrpc2_message *message;
+  /** The userdata given to ezgrpc2_server_register_path(). */
+  void *userdata;
+} ezgrpc2_event;
 
-// void ezgrpc2_event_free(ezgrpc2_event *event);
-
-#endif
+#endif /* EZGRPC2_EVENT_H */

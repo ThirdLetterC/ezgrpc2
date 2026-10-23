@@ -56,12 +56,12 @@ void test_metadata_binary_random_bytes(void) {
 }
 
 void test_metadata_null_handling(void) {
-  TEST_ASSERT_NULL(ezgrpc2_metadata_encode_bin(nullptr, 10, nullptr));
-  TEST_ASSERT_NULL(ezgrpc2_metadata_decode_bin(nullptr, 10, nullptr));
-  TEST_ASSERT_NULL(ezgrpc2_metadata_get(nullptr, (ezgrpc2_session_uuid){0}, 1, "test", nullptr));
-  TEST_ASSERT_EQUAL_UINT64(0, ezgrpc2_metadata_count(nullptr, (ezgrpc2_session_uuid){0}, 1));
-  TEST_ASSERT_EQUAL_INT(1,
-                        ezgrpc2_metadata_get_at(nullptr, (ezgrpc2_session_uuid){0}, 1, 0, nullptr));
+  TEST_ASSERT_NULL(ezgrpc2_metadata_encode_bin(nullptr, 0, nullptr));
+  TEST_ASSERT_NULL(ezgrpc2_metadata_decode_bin(nullptr, 0, nullptr));
+  TEST_ASSERT_NULL(ezgrpc2_call_metadata(nullptr, "test", nullptr));
+  TEST_ASSERT_EQUAL_UINT64(0, (uint64_t)ezgrpc2_call_metadata_count(nullptr));
+  ezgrpc2_metadata entry;
+  TEST_ASSERT_FALSE(ezgrpc2_call_metadata_at(nullptr, 0, &entry));
 }
 
 int main(void) {

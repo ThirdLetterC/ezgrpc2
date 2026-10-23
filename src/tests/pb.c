@@ -28,7 +28,7 @@ void test_pb_pack_and_unpack(void) {
   echo.number = 42;
 
   // Pack into ezgrpc2_message
-  ezgrpc2_message *msg = ezgrpc2_pb_pack((ProtobufCMessage *)&echo, 0);
+  ezgrpc2_message *msg = ezgrpc2_pb_pack((ProtobufCMessage *)&echo);
   TEST_ASSERT_NOT_NULL(msg);
   TEST_ASSERT_EQUAL_UINT8(0, msg->cflag);
   TEST_ASSERT_GREATER_THAN_UINT32(0, msg->len);
@@ -44,32 +44,15 @@ void test_pb_pack_and_unpack(void) {
   ezgrpc2_message_free(msg);
 }
 
-void test_pb_create_response(void) {
+void test_pb_send_null_safety(void) {
   Test__Echo echo = TEST__ECHO__INIT;
-  echo.text = (char *)"Response Test";
-  echo.number = 100;
-
-  ezgrpc2_messages *msgs = ezgrpc2_pb_create_response((ProtobufCMessage *)&echo);
-  TEST_ASSERT_NOT_NULL(msgs);
-  TEST_ASSERT_EQUAL_UINT64(1, (uint64_t)ezgrpc2_messages_count(msgs));
-
-  ezgrpc2_message *msg = ezgrpc2_messages_pop(msgs);
-  TEST_ASSERT_NOT_NULL(msg);
-
-  Test__Echo *unpacked = EZGRPC2_PB_UNPACK(Test__Echo, &test__echo__descriptor, msg);
-  TEST_ASSERT_NOT_NULL(unpacked);
-  TEST_ASSERT_EQUAL_STRING("Response Test", unpacked->text);
-  TEST_ASSERT_EQUAL_INT32(100, unpacked->number);
-
-  EZGRPC2_PB_FREE_UNPACKED(unpacked);
-  ezgrpc2_message_free(msg);
-  ezgrpc2_messages_free(msgs);
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID, ezgrpc2_call_send_pb(nullptr, &echo.base));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID, ezgrpc2_call_send_pb(nullptr, nullptr));
 }
 
 void test_pb_null_safety(void) {
-  TEST_ASSERT_NULL(ezgrpc2_pb_pack(nullptr, 0));
+  TEST_ASSERT_NULL(ezgrpc2_pb_pack(nullptr));
   TEST_ASSERT_NULL(ezgrpc2_pb_unpack(nullptr, nullptr));
-  TEST_ASSERT_NULL(ezgrpc2_pb_create_response(nullptr));
   // Freeing null should not crash
   ezgrpc2_pb_free_unpacked(nullptr);
 }
@@ -78,7 +61,7 @@ int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_pb_allocator);
   RUN_TEST(test_pb_pack_and_unpack);
-  RUN_TEST(test_pb_create_response);
+  RUN_TEST(test_pb_send_null_safety);
   RUN_TEST(test_pb_null_safety);
   return UNITY_END();
 }

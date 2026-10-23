@@ -104,12 +104,12 @@ void *tls_backend_ctx_native(ezgrpc2_tls_ctx *ctx) {
 }
 
 ezgrpc2_tls_session *tls_backend_session_new(ezgrpc2_tls_ctx *ctx) {
-  ezgrpc2_tls_session *tls = calloc(1, sizeof(*tls));
+  ezgrpc2_tls_session *tls = ezgrpc2_calloc(1, sizeof(*tls));
   if (tls == nullptr) {
     return nullptr;
   }
   if (rustls_server_connection_new(rustls_config(ctx), &tls->conn) != RUSTLS_RESULT_OK) {
-    free(tls);
+    ezgrpc2_free(tls);
     return nullptr;
   }
   return tls;
@@ -118,7 +118,7 @@ ezgrpc2_tls_session *tls_backend_session_new(ezgrpc2_tls_ctx *ctx) {
 void tls_backend_session_free(ezgrpc2_tls_session *tls) {
   rustls_connection_free(tls->conn);
   tls_io_free(&tls->io);
-  free(tls);
+  ezgrpc2_free(tls);
 }
 
 int tls_backend_feed(ezgrpc2_tls_session *tls, const void *buf, size_t len) {

@@ -1,119 +1,156 @@
-/* ezgrpc2.c - A (crude) gRPC server in C. */
+#ifndef EZGRPC2_CALL_H
+#define EZGRPC2_CALL_H
 
-#ifndef EZGRPC2_SESSION_H
-#define EZGRPC2_SESSION_H
-
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
-#include <stdint.h>
-#include "common.h"
-
-#include "ezgrpc2_event.h"
-#include "ezgrpc2_global.h"
-#include "ezgrpc2_http2_settings.h"
-#include "ezgrpc2_server.h"
-#include "ezgrpc2_server_settings.h"
-#include "ezgrpc2_session_uuid.h"
-#include "ezgrpc2_messages.h"
-#include "ezgrpc2_path.h"
-#include "ezgrpc2_header.h"
-#include "ezgrpc2_grpc_status.h"
-
-// int ezgrpc2_session_submit_response(ezgrpc2_session *ezsession, i32 stream_id, ezgrpc2_list *lmessages, int end_stream, int grpc_status);
+#include "ezgrpc2_defs.h"
+#include "ezgrpc2_error.h"
+#include "ezgrpc2_message.h"
+#include "ezgrpc2_metadata.h"
+#include "ezgrpc2_status.h"
 
 /**
- * The :c:func:`ezgrpc2_session_send()` sends the  messages in the list,
- * ``lmessages`` to the associated session_uuid and stream_id.
-
- * On success, the :c:func:`ezgrpc2_session_send()` takes ownership of lmessages
+ * A gRPC call (an HTTP/2 stream). Everything about one request goes through
+ * its call: reading metadata, sending responses and finishing it.
  *
- * A sucessful return value may mean:
+ * Lifetime: a call handed to a handler or found in an event stays valid until
+ * the handler returns (or until the next ezgrpc2_server_poll() for events).
+ * Take a reference with ezgrpc2_call_ref() to keep it longer, e.g. to answer
+ * from another thread, and drop it with ezgrpc2_call_unref().
  *
- * * The message was sent.
+ * A call outlives its stream: once the client is gone, operations on it fail
+ * with EZGRPC2_ERR_CLOSED instead of crashing.
  *
- * * The message is queued and pending, possible cause is
- *   when the client HTTP2 window is full or the socket which have been
- *   marked as non-blocking returns ``EWOULDBLOCK``.
- *
- * :returns:
- *    * On success, 0.
- *
- *    * If the session doesn't exists, 1.
- *
- *    * If the stream_id doesn't exists, 2.
- *
+ * Threads: every function here must be called from the thread running the
+ * server, except ezgrpc2_call_ref(), ezgrpc2_call_unref(),
+ * ezgrpc2_call_send_async() and ezgrpc2_call_finish_async().
  */
-int ezgrpc2_server_session_stream_send(ezgrpc2_server *ezserver, ezgrpc2_session_uuid session_uuid,
-                                       i32 stream_id, ezgrpc2_messages *messages);
+typedef struct ezgrpc2_call ezgrpc2_call;
+typedef struct ezgrpc2_server ezgrpc2_server;
+
+/* ---- the request ------------------------------------------------------ */
 
 /**
- * The :c:func:`ezgrpc2_session_end_stream()` ends the stream associated with the session_uuid and stream_id.
- *
- * :returns:
- *    * On success, 0.
- *
- *    * If the session doesn't exists, 1.
- *
- *    * If the stream_id doesn't exists, 2.
+ * The request of a method registered with ezgrpc2_server_handle(). It stays
+ * valid as long as the call. nullptr for other methods.
  */
-int ezgrpc2_server_session_stream_end(ezgrpc2_server *ezserver, ezgrpc2_session_uuid session_uuid,
-                                      i32 stream_id, ezgrpc2_grpc_status status);
+EZGRPC2_API const ezgrpc2_message *ezgrpc2_call_request(const ezgrpc2_call *call);
+
+/** The method path, e.g. ``"/helloworld.Greeter/SayHello"``. */
+EZGRPC2_API const char *ezgrpc2_call_method(const ezgrpc2_call *call);
+
+/** The client address, e.g. ``"127.0.0.1:51234"`` or ``"[::1]:51234"``. */
+EZGRPC2_API const char *ezgrpc2_call_peer(const ezgrpc2_call *call);
 
 /**
- * The :c:func:`ezgrpc2_server_session_end()` ends the session
- * associated with the session_uuid.
- *
- * :returns:
- *    * On success, 0.
- *
- *    * If the session doesn't exists, 1.
+ * Looks up request metadata by key (case-insensitive). Returns the value,
+ * NULL-terminated and valid as long as the call, or nullptr if absent.
+ * ``len`` may be nullptr.
  */
-int ezgrpc2_server_session_end(ezgrpc2_server *ezserver, ezgrpc2_session_uuid session_id,
-                               i32 last_stream_id, int status);
+EZGRPC2_API const char *ezgrpc2_call_metadata(const ezgrpc2_call *call, const char *key,
+                                              size_t *len);
 
-#if 0
-/* list of ezgrpc2_header */
-ezgrpc2_list ezgrpc2_session_get_headers(
-  ezgrpc2_server *ezserver,
-  char session_id[EZGRPC2_SESSION_UUID_LEN],
-  i32 stream_id);
-#endif
+/** The number of request headers, including pseudo-headers such as ``:path``. */
+EZGRPC2_API size_t ezgrpc2_call_metadata_count(const ezgrpc2_call *call);
+
+/** Reads the request header at ``index``. Returns false if out of range. */
+EZGRPC2_API bool ezgrpc2_call_metadata_at(const ezgrpc2_call *call, size_t index,
+                                          ezgrpc2_metadata *out);
 
 /**
- * The :c:func:`ezgrpc2_session_find_header()` finds the associated header value
- * for the matching header `name`.
- *
- * Example 1:
- *
- * .. code-block:: C
- *
- *    ezgrpc2_header ezheader = {.name = "content-type", .nlen = 12};
- *    if (!ezgrpc2_session_find_header(ezserver, session_uuid, stream_id, &ezheader))
- *      printf("Found value %.*s\n", ezheader.vlen, ezheader.value);
- *
- * If name is found, ezheader.value and ezheader.vlen is initialized.
- *
- * The address in ezheader.value is owned by the library. It must not
- * be freed or modified. User should make a copy of this value if required.
- *
- * :returns:
- *    * If header name is found, 0
- *
- *    * If the session doesn't exists, 1
- *
- *    * If the stream_id doesn't exists, 2
- *
- *    * If header name is not found, 3
- *
- * .. note::
- *    Strings are compared ignoring case
- * */
-int ezgrpc2_server_session_stream_find_header(ezgrpc2_server *ezserver,
-                                              ezgrpc2_session_uuid session_uuid, i32 stream_id,
-                                              ezgrpc2_header *ezheader);
+ * Milliseconds left until the client's deadline (``grpc-timeout``), 0 once it
+ * passed, or -1 without a deadline. The library ends calls that run past
+ * their deadline with DEADLINE_EXCEEDED.
+ */
+EZGRPC2_API int64_t ezgrpc2_call_deadline(const ezgrpc2_call *call);
 
-const char *ezgrpc2_license(void);
+/**
+ * True once the call ended without the application finishing it: the client
+ * cancelled or disconnected, the deadline passed, or a message was truncated.
+ */
+EZGRPC2_API bool ezgrpc2_call_is_cancelled(const ezgrpc2_call *call);
 
-#endif /* EZGRPC2_H */
+/**
+ * Why the call was cancelled: CANCELLED (by the client), DEADLINE_EXCEEDED,
+ * UNAVAILABLE (connection lost) or DATA_LOSS. EZGRPC2_STATUS_OK if it was not.
+ */
+EZGRPC2_API ezgrpc2_status ezgrpc2_call_cancel_reason(const ezgrpc2_call *call);
+
+/** The server the call belongs to. */
+EZGRPC2_API ezgrpc2_server *ezgrpc2_call_server(const ezgrpc2_call *call);
+
+/* ---- per-call state ----------------------------------------------------- */
+
+/**
+ * Attaches application data to the call, e.g. the state of a streaming call.
+ * ``free_fn`` (may be nullptr) is called on it when the call is released.
+ */
+EZGRPC2_API void ezgrpc2_call_set_userdata(ezgrpc2_call *call, void *data,
+                                           void (*free_fn)(void *data));
+
+/** Returns the data set with ezgrpc2_call_set_userdata(), or nullptr. */
+EZGRPC2_API void *ezgrpc2_call_userdata(const ezgrpc2_call *call);
+
+/**
+ * Calls ``fn`` if the call is cancelled after this point (see
+ * ezgrpc2_call_is_cancelled()). Useful for calls answered later.
+ */
+EZGRPC2_API void ezgrpc2_call_on_cancel(ezgrpc2_call *call,
+                                        void (*fn)(ezgrpc2_call *call, void *userdata),
+                                        void *userdata);
+
+/* ---- answering ---------------------------------------------------------- */
+
+/**
+ * Sends initial metadata (response headers). Only before the first message.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_metadata(ezgrpc2_call *call,
+                                                   const ezgrpc2_metadata *metadata,
+                                                   size_t count);
+
+/**
+ * Sends a response message. Takes ownership of ``message``, also when it
+ * fails. Call it several times to stream responses.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send(ezgrpc2_call *call, ezgrpc2_message *message);
+
+/**
+ * Sends a copy of ``len`` bytes of ``data`` as a response message.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_data(ezgrpc2_call *call, const void *data,
+                                               size_t len);
+
+/**
+ * Adds trailing metadata, sent by ezgrpc2_call_finish().
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_add_trailers(ezgrpc2_call *call,
+                                                  const ezgrpc2_metadata *metadata,
+                                                  size_t count);
+
+/**
+ * Ends the call with a status. ``message`` (may be nullptr) is sent as
+ * ``grpc-message``; error statuses without one get the status name.
+ * Every call must be finished exactly once, unless it is cancelled.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_finish(ezgrpc2_call *call, ezgrpc2_status status,
+                                            const char *message);
+
+/* ---- references and threads --------------------------------------------- */
+
+/** Takes a reference, keeping the call valid. Thread-safe. Returns ``call``. */
+EZGRPC2_API ezgrpc2_call *ezgrpc2_call_ref(ezgrpc2_call *call);
+
+/** Drops a reference taken with ezgrpc2_call_ref(). Thread-safe. */
+EZGRPC2_API void ezgrpc2_call_unref(ezgrpc2_call *call);
+
+/**
+ * Thread-safe ezgrpc2_call_send(): queues the message for the server thread
+ * and wakes it up. The caller must hold a reference to the call.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_async(ezgrpc2_call *call, ezgrpc2_message *message);
+
+/**
+ * Thread-safe ezgrpc2_call_finish(). The caller must hold a reference.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_finish_async(ezgrpc2_call *call, ezgrpc2_status status,
+                                                  const char *message);
+
+#endif /* EZGRPC2_CALL_H */

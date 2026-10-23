@@ -154,8 +154,32 @@ def main():
         print(f"[client] Received compressed response: '{resp_comp.message}'")
         assert resp_comp.message == "Hello, CompressedClient!"
 
-        # 8. Standard gRPC Health Check Protocol
-        print(f"\n[client] 8. Testing gRPC Health Check Protocol (/grpc.health.v1.Health/Check)...")
+        # 8. A reply from a worker thread, and a deadline that passes first
+        print(f"\n[client] 8. Testing replies from a worker thread (SayHelloSlow)...")
+        resp_slow = stub.SayHelloSlow(helloworld_pb2.HelloRequest(name="Patient"), timeout=5)
+        assert resp_slow.message == "Hello slowly, Patient!", resp_slow.message
+        try:
+            stub.SayHelloSlow(helloworld_pb2.HelloRequest(name="Impatient"), timeout=0.1)
+            assert False, "Expected DEADLINE_EXCEEDED"
+        except grpc.RpcError as rpc_err:
+            assert rpc_err.code() == grpc.StatusCode.DEADLINE_EXCEEDED, rpc_err.code()
+        # the abandoned call's late reply must not disturb the next one
+        resp_slow = stub.SayHelloSlow(helloworld_pb2.HelloRequest(name="Again"), timeout=5)
+        assert resp_slow.message == "Hello slowly, Again!", resp_slow.message
+        print("[client] Async replies and deadlines OK")
+
+        # 9. An interceptor rejecting a call
+        print(f"\n[client] 9. Testing an interceptor that rejects calls...")
+        try:
+            stub.SayHello(helloworld_pb2.HelloRequest(name="x"), metadata=(('x-reject', 'yes'),), timeout=5)
+            assert False, "Expected PERMISSION_DENIED"
+        except grpc.RpcError as rpc_err:
+            assert rpc_err.code() == grpc.StatusCode.PERMISSION_DENIED, rpc_err.code()
+            assert rpc_err.details() == "rejected by the interceptor", rpc_err.details()
+        print("[client] Interceptor rejection OK")
+
+        # 9b. Standard gRPC Health Check Protocol
+        print(f"\n[client] 9. Testing gRPC Health Check Protocol (/grpc.health.v1.Health/Check)...")
         health_check_fn = channel.unary_unary(
             '/grpc.health.v1.Health/Check',
             request_serializer=lambda x: x,
@@ -167,8 +191,8 @@ def main():
             f"Expected SERVING (0x08, 0x01), got {health_resp}"
         print("[client] Health check status: SERVING (OK)")
 
-        # 9. Standard gRPC Server Reflection Protocol
-        print(f"\n[client] 9. Testing gRPC Server Reflection Protocol (list_services)...")
+        # 10. Standard gRPC Server Reflection Protocol
+        print(f"\n[client] 10. Testing gRPC Server Reflection Protocol (list_services)...")
         refl_fn = channel.stream_stream(
             '/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo',
             request_serializer=lambda x: x,
@@ -182,7 +206,7 @@ def main():
         assert b"grpc.health.v1.Health" in refl_resp, "Expected grpc.health.v1.Health in reflection list"
         print("[client] Server Reflection successfully verified! Discovered services in reflection response.")
 
-    print("\n[client] ALL TESTS (Metadata, Client Streaming, Bidi Streaming, Rich Errors, Compression, Health, Reflection) PASSED successfully!")
+    print("\n[client] ALL TESTS (Metadata, Client Streaming, Bidi Streaming, Rich Errors, Compression, Async, Deadlines, Interceptors, Health, Reflection) PASSED successfully!")
     return 0
 
 

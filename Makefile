@@ -10,6 +10,7 @@ all :
 
 test: all
 	$(MAKE) -C src/tests test
+	$(MAKE) -C examples test
 	$(MAKE) -C examples/python_client_c_server test
 ifneq ($(TLS),none)
 	$(MAKE) -C examples/python_client_c_server test-tls
@@ -40,7 +41,7 @@ help:
 	@echo "  make T=1 all        enables server trace logs for development (may provide heavy overheads)"
 	@echo "  make MIMALLOC=1 all enables Microsoft mimalloc allocator"
 	@echo "  make JEMALLOC=1 all enables jemalloc allocator"
-	@echo "  make ALLOCATOR=name enables specific allocator (default, mimalloc, jemalloc, custom)"
+	@echo "  make ALLOCATOR=name enables specific allocator (default, mimalloc, jemalloc)"
 	@echo "  make PROTOBUF_C=1   enables protobuf-c integration (auto-detected by default)"
 	@echo "  make FLATCC=1       enables FlatBuffers (flatcc) integration (auto-detected by default)"
 	@echo "  make FLATCC_PREFIX=dir flatcc installed in dir (scripts/build-flatcc.sh builds it)"

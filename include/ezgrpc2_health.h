@@ -1,16 +1,14 @@
 #ifndef EZGRPC2_HEALTH_H
 #define EZGRPC2_HEALTH_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include "defs.h"
-#include "ezgrpc2_server.h"
-#include "ezgrpc2_event.h"
+#include "ezgrpc2_defs.h"
+#include "ezgrpc2_error.h"
+
+typedef struct ezgrpc2_server ezgrpc2_server;
 
 #define EZGRPC2_HEALTH_PATH_CHECK "/grpc.health.v1.Health/Check"
-#define EZGRPC2_HEALTH_PATH_WATCH "/grpc.health.v1.Health/Watch"
 
-typedef enum {
+typedef enum ezgrpc2_health_status {
   EZGRPC2_HEALTH_UNKNOWN = 0,
   EZGRPC2_HEALTH_SERVING = 1,
   EZGRPC2_HEALTH_NOT_SERVING = 2,
@@ -18,28 +16,23 @@ typedef enum {
 } ezgrpc2_health_status;
 
 /**
- * Registers the standard gRPC Health service (/grpc.health.v1.Health/Check)
- * on the provided server.
- * Returns 0 on success, non-zero on failure.
+ * Serves the standard gRPC health check (/grpc.health.v1.Health/Check).
+ * Services report SERVING until ezgrpc2_health_set_status() says otherwise.
  */
-EZGRPC2_API int ezgrpc2_health_register(ezgrpc2_server *server);
+EZGRPC2_API ezgrpc2_err ezgrpc2_health_enable(ezgrpc2_server *server);
 
 /**
- * Sets the serving status for a specific service name.
- * If service is empty string ("") or nullptr, sets the overall server status.
+ * Sets the status of a service, or of the whole server when ``service`` is
+ * nullptr or "". Safe to call from any thread.
  */
-EZGRPC2_API void ezgrpc2_health_set_status(const char *service, ezgrpc2_health_status status);
+EZGRPC2_API ezgrpc2_err ezgrpc2_health_set_status(ezgrpc2_server *server, const char *service,
+                                                  ezgrpc2_health_status status);
 
 /**
- * Gets the current serving status for a specific service name.
- * If service is empty string ("") or nullptr, gets the overall server status.
+ * Returns the status of a service, or of the whole server when ``service`` is
+ * nullptr or "". Safe to call from any thread.
  */
-EZGRPC2_API ezgrpc2_health_status ezgrpc2_health_get_status(const char *service);
-
-/**
- * Handles an EZGRPC2_EVENT_MESSAGE for the health check service.
- * Returns true if the event was handled by the health service, false otherwise.
- */
-EZGRPC2_API bool ezgrpc2_health_handle_event(ezgrpc2_server *server, ezgrpc2_event *event);
+EZGRPC2_API ezgrpc2_health_status ezgrpc2_health_get_status(ezgrpc2_server *server,
+                                                            const char *service);
 
 #endif /* EZGRPC2_HEALTH_H */

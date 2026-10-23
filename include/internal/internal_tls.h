@@ -9,6 +9,9 @@
 #include "ezgrpc2_tls.h"
 #include "internal_helpers.h"
 
+/* the backend's server context */
+typedef struct ezgrpc2_tls_ctx ezgrpc2_tls_ctx;
+
 /* Per-connection TLS layer, used by the session code. These return:
  *   ezgrpc2_tls_session_init, _feed, _drain: 0 on success
  *   ezgrpc2_tls_handshake: 1 when complete, 0 while in progress, -1 on error

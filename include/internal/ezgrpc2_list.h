@@ -1,7 +1,7 @@
 #ifndef EZGRPC2_LIST_H
 #define EZGRPC2_LIST_H
 #include <stdlib.h>
-#include "defs.h"
+#include "ezgrpc2_defs.h"
 
 /**
  * An opaque list context.
@@ -13,7 +13,7 @@ typedef struct ezgrpc2_list ezgrpc2_list;
  *   Create a new list.
  *
  */
-ezgrpc2_list *ezgrpc2_list_new(void *unused);
+ezgrpc2_list *ezgrpc2_list_new(void);
 
 void ezgrpc2_list_free(ezgrpc2_list *list);
 

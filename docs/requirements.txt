@@ -1,1 +1,3 @@
 sphinx-c-autodoc==1.3.0
+# the Python bindings must match the libclang of .readthedocs.yaml
+clang==17.0.6

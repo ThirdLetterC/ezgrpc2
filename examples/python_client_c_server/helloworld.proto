@@ -16,6 +16,8 @@ service Greeter {
   rpc SayHelloBidiStream (stream HelloRequest) returns (stream HelloReply);
   // Returns rich error details with google.rpc.Status in grpc-status-details-bin
   rpc SayHelloWithError (HelloRequest) returns (HelloReply);
+  // Answered from a worker thread after 300 ms
+  rpc SayHelloSlow (HelloRequest) returns (HelloReply);
 }
 
 // The request message containing the user's name.

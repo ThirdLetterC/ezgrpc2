@@ -6,9 +6,7 @@
 EZgRPC2
 =======
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+EZgRPC2 is a gRPC server library in C23, built on libuv and nghttp2.
 
 
 .. toctree::
@@ -16,6 +14,4 @@ documentation for details.
    :caption: Contents:
 
    ezgrpc2
-   pthpool
-   list
 

@@ -1,102 +1,70 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 #include "ezgrpc2.h"
 #include "unity.h"
+
+/* interceptors run on real calls; the Python integration test of
+ * examples/python_client_c_server exercises on_call, rejection and on_done */
 
 void setUp(void) {}
 void tearDown(void) {}
 
-static int s_pre_calls = 0;
-static int s_post_calls = 0;
+static int s_freed = 0;
 
-static ezgrpc2_grpc_status dummy_pre_pass([[maybe_unused]] ezgrpc2_server *server,
-                                          [[maybe_unused]] const ezgrpc2_interceptor_info *info,
-                                          [[maybe_unused]] const char **custom_error_msg,
-                                          [[maybe_unused]] void *interceptor_data) {
-  s_pre_calls++;
-  return EZGRPC2_GRPC_STATUS_OK;
+static ezgrpc2_status pass([[maybe_unused]] ezgrpc2_call *call,
+                           [[maybe_unused]] const char **message,
+                           [[maybe_unused]] void *userdata) {
+  return EZGRPC2_STATUS_OK;
 }
 
-static ezgrpc2_grpc_status dummy_pre_reject([[maybe_unused]] ezgrpc2_server *server,
-                                            [[maybe_unused]] const ezgrpc2_interceptor_info *info,
-                                            const char **custom_error_msg,
-                                            [[maybe_unused]] void *interceptor_data) {
-  s_pre_calls++;
-  *custom_error_msg = "Access Denied by Interceptor";
-  return EZGRPC2_GRPC_STATUS_PERMISSION_DENIED;
+static void count_free([[maybe_unused]] void *userdata) {
+  s_freed++;
 }
 
-static void dummy_post([[maybe_unused]] ezgrpc2_server *server,
-                       [[maybe_unused]] const ezgrpc2_interceptor_info *info,
-                       [[maybe_unused]] ezgrpc2_grpc_status status,
-                       [[maybe_unused]] uint64_t duration_ms,
-                       [[maybe_unused]] void *interceptor_data) {
-  s_post_calls++;
-}
-
-static bool my_token_validator(const char *token, [[maybe_unused]] void *user_data) {
+static bool validator(const char *token, [[maybe_unused]] void *userdata) {
   return strcmp(token, "valid-secret-token") == 0;
 }
 
-void test_interceptor_registration_and_hooks(void) {
-  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19998, nullptr, 0, 16, nullptr, nullptr);
+void test_interceptor_registration(void) {
+  ezgrpc2_server *server = ezgrpc2_server_new(
+      &(ezgrpc2_config){.port = 19998, .ipv4_addr = "127.0.0.1", .log_level = EZGRPC2_LOG_OFF});
   TEST_ASSERT_NOT_NULL(server);
 
-  ezgrpc2_interceptor pass_inc = {
-      .name = "pass_inc",
-      .pre_fn = dummy_pre_pass,
-      .post_fn = dummy_post,
-      .user_data = nullptr,
+  ezgrpc2_interceptor inc = {
+      .name = "pass",
+      .on_call = pass,
+      .userdata = &s_freed,
+      .userdata_free = count_free,
   };
-  TEST_ASSERT_EQUAL_INT(0, ezgrpc2_server_add_interceptor(server, &pass_inc));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_server_add_interceptor(server, &inc));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_server_add_interceptor(server, &inc));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_ERR_INVALID, ezgrpc2_server_add_interceptor(server, nullptr));
 
-  s_pre_calls = 0;
-  s_post_calls = 0;
-
-  ezgrpc2_event dummy_event = {};
-  dummy_event.type = EZGRPC2_EVENT_MESSAGE;
-  dummy_event.session_uuid = (ezgrpc2_session_uuid){0};
-  dummy_event.message.stream_id = 1;
-  dummy_event.message.end_stream = true;
-
-  bool ok = ezgrpc2_server_intercept_pre(server, &dummy_event, "/test.Service/Method");
-  TEST_ASSERT_TRUE(ok);
-  TEST_ASSERT_EQUAL_INT(1, s_pre_calls);
-
-  ezgrpc2_server_intercept_post(server, &dummy_event, "/test.Service/Method",
-                                EZGRPC2_GRPC_STATUS_OK, 10);
-  TEST_ASSERT_EQUAL_INT(1, s_post_calls);
-
-  // Add reject interceptor
-  ezgrpc2_interceptor rej_inc = {
-      .name = "rej_inc",
-      .pre_fn = dummy_pre_reject,
-      .post_fn = nullptr,
-      .user_data = nullptr,
-  };
-  TEST_ASSERT_EQUAL_INT(0, ezgrpc2_server_add_interceptor(server, &rej_inc));
-
-  // Pre intercept should now fail
-  ok = ezgrpc2_server_intercept_pre(server, &dummy_event, "/test.Service/Method");
-  TEST_ASSERT_FALSE(ok);
-  TEST_ASSERT_EQUAL_INT(3, s_pre_calls); // 1 from pass_inc, 1 from rej_inc
-
+  /* the server owns the userdata */
+  s_freed = 0;
   ezgrpc2_server_free(server);
+  TEST_ASSERT_EQUAL_INT(2, s_freed);
 }
 
-void test_bearer_auth_interceptor_creation(void) {
-  ezgrpc2_interceptor auth_inc =
-      ezgrpc2_interceptor_create_bearer_auth(my_token_validator, nullptr);
-  TEST_ASSERT_NOT_NULL(auth_inc.pre_fn);
-  TEST_ASSERT_EQUAL_STRING("bearer_auth", auth_inc.name);
-  ezgrpc2_free(auth_inc.user_data);
+void test_bearer_auth_interceptor(void) {
+  ezgrpc2_interceptor auth = ezgrpc2_interceptor_bearer_auth(validator, nullptr);
+  TEST_ASSERT_EQUAL_STRING("bearer_auth", auth.name);
+  TEST_ASSERT_NOT_NULL(auth.on_call);
+  TEST_ASSERT_NOT_NULL(auth.userdata);
+  TEST_ASSERT_NOT_NULL(auth.userdata_free);
+
+  /* freed with the server */
+  ezgrpc2_server *server = ezgrpc2_server_new(
+      &(ezgrpc2_config){.port = 19998, .ipv4_addr = "127.0.0.1", .log_level = EZGRPC2_LOG_OFF});
+  TEST_ASSERT_NOT_NULL(server);
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_OK, ezgrpc2_server_add_interceptor(server, &auth));
+  ezgrpc2_server_free(server);
 }
 
 int main(void) {
   UNITY_BEGIN();
-  RUN_TEST(test_interceptor_registration_and_hooks);
-  RUN_TEST(test_bearer_auth_interceptor_creation);
+  RUN_TEST(test_interceptor_registration);
+  RUN_TEST(test_bearer_auth_interceptor);
   return UNITY_END();
 }

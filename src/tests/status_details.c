@@ -21,7 +21,7 @@ void test_status_details_roundtrip_with_any(void) {
   };
 
   size_t enc_len = 0;
-  char *b64 = ezgrpc2_status_details_encode((int32_t)EZGRPC2_GRPC_STATUS_NOT_FOUND, msg, &detail, 1,
+  char *b64 = ezgrpc2_status_details_encode((int32_t)EZGRPC2_STATUS_NOT_FOUND, msg, &detail, 1,
                                             &enc_len);
 
   TEST_ASSERT_NOT_NULL(b64);
@@ -36,7 +36,7 @@ void test_status_details_roundtrip_with_any(void) {
   int rc = ezgrpc2_status_details_decode(b64, &dec_code, &dec_msg, &dec_url, &dec_val, &dec_vlen);
 
   TEST_ASSERT_EQUAL_INT(0, rc);
-  TEST_ASSERT_EQUAL_INT32((int32_t)EZGRPC2_GRPC_STATUS_NOT_FOUND, dec_code);
+  TEST_ASSERT_EQUAL_INT32((int32_t)EZGRPC2_STATUS_NOT_FOUND, dec_code);
   TEST_ASSERT_NOT_NULL(dec_msg);
   TEST_ASSERT_EQUAL_STRING(msg, dec_msg);
   TEST_ASSERT_NOT_NULL(dec_url);
@@ -53,7 +53,7 @@ void test_status_details_roundtrip_with_any(void) {
 void test_status_details_basic_roundtrip(void) {
   const char *msg = "Invalid user argument";
   size_t enc_len = 0;
-  char *b64 = ezgrpc2_status_details_encode((int32_t)EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT, msg,
+  char *b64 = ezgrpc2_status_details_encode((int32_t)EZGRPC2_STATUS_INVALID_ARGUMENT, msg,
                                             nullptr, 0, &enc_len);
 
   TEST_ASSERT_NOT_NULL(b64);
@@ -63,7 +63,7 @@ void test_status_details_basic_roundtrip(void) {
 
   int rc = ezgrpc2_status_details_decode(b64, &dec_code, &dec_msg, nullptr, nullptr, nullptr);
   TEST_ASSERT_EQUAL_INT(0, rc);
-  TEST_ASSERT_EQUAL_INT32((int32_t)EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT, dec_code);
+  TEST_ASSERT_EQUAL_INT32((int32_t)EZGRPC2_STATUS_INVALID_ARGUMENT, dec_code);
   TEST_ASSERT_NOT_NULL(dec_msg);
   TEST_ASSERT_EQUAL_STRING(msg, dec_msg);
 

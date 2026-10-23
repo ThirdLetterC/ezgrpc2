@@ -1,14 +1,14 @@
 #ifndef EZGRPC2_LIST_MESSAGE_H
 #define EZGRPC2_LIST_MESSAGE_H
 
-#include "defs.h"
+#include "ezgrpc2_defs.h"
 #include "ezgrpc2_list.h"
 #include "ezgrpc2_message.h"
 
 typedef struct ezgrpc2_list_message_t ezgrpc2_list_message_t;
 
 static inline ezgrpc2_list_message_t *ezgrpc2_list_message_new([[maybe_unused]] void *unused) {
-  return (ezgrpc2_list_message_t *)ezgrpc2_list_new(nullptr);
+  return (ezgrpc2_list_message_t *)ezgrpc2_list_new();
 }
 
 static inline void ezgrpc2_list_message_free(ezgrpc2_list_message_t *list) {

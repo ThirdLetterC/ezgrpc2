@@ -1,115 +1,81 @@
-#define EZGRPC2_NO_ALLOC_OVERRIDE
+#include <stdlib.h>
+#include <string.h>
 #include "ezgrpc2_mem.h"
 
 #if defined(EZGRPC2_USE_MIMALLOC)
-static const char *g_allocator_name = "mimalloc";
+#include <mimalloc.h>
+#define DEFAULT_NAME "mimalloc"
+#define DEFAULT_ALLOCATOR                                                                          \
+  {mi_malloc, mi_calloc, mi_realloc, mi_free, mi_aligned_alloc}
 #elif defined(EZGRPC2_USE_JEMALLOC)
-static const char *g_allocator_name = "jemalloc";
-#elif defined(EZGRPC2_USE_CUSTOM_ALLOCATOR)
-static const char *g_allocator_name = "custom";
+/* jemalloc replaces the libc functions when linked */
+#define DEFAULT_NAME      "jemalloc"
+#define DEFAULT_ALLOCATOR {malloc, calloc, realloc, free, aligned_alloc}
 #else
-static const char *g_allocator_name = "default (libc)";
+#define DEFAULT_NAME      "libc"
+#define DEFAULT_ALLOCATOR {malloc, calloc, realloc, free, aligned_alloc}
 #endif
 
-static void *default_malloc(size_t size) {
-#if defined(EZGRPC2_USE_MIMALLOC)
-  return mi_malloc(size);
-#else
-  return malloc(size);
-#endif
-}
-
-static void *default_calloc(size_t count, size_t size) {
-#if defined(EZGRPC2_USE_MIMALLOC)
-  return mi_calloc(count, size);
-#else
-  return calloc(count, size);
-#endif
-}
-
-static void *default_realloc(void *ptr, size_t newsize) {
-#if defined(EZGRPC2_USE_MIMALLOC)
-  return mi_realloc(ptr, newsize);
-#else
-  return realloc(ptr, newsize);
-#endif
-}
-
-static void default_free(void *ptr) {
-#if defined(EZGRPC2_USE_MIMALLOC)
-  mi_free(ptr);
-#else
-  free(ptr);
-#endif
-}
-
-static void *default_aligned_alloc(size_t alignment, size_t size) {
-#if defined(EZGRPC2_USE_MIMALLOC)
-  return mi_aligned_alloc(alignment, size);
-#else
-  return aligned_alloc(alignment, size);
-#endif
-}
-
-static char *default_strndup(const char *s, size_t n) {
-#if defined(EZGRPC2_USE_MIMALLOC)
-  return mi_strndup(s, n);
-#else
-  if (s == nullptr)
-    return nullptr;
-  size_t l = 0;
-  while (l < n && s[l] != '\0')
-    l++;
-  char *r = default_malloc(l + 1);
-  if (r != nullptr) {
-    memcpy(r, s, l);
-    r[l] = '\0';
-  }
-  return r;
-#endif
-}
-
-static ezgrpc2_allocator g_ezgrpc2_default_allocator = {
-    .malloc = default_malloc,
-    .calloc = default_calloc,
-    .realloc = default_realloc,
-    .free = default_free,
-    .aligned_alloc = default_aligned_alloc,
-    .strndup = default_strndup,
-};
-
-ezgrpc2_allocator g_ezgrpc2_current_allocator = {
-    .malloc = default_malloc,
-    .calloc = default_calloc,
-    .realloc = default_realloc,
-    .free = default_free,
-    .aligned_alloc = default_aligned_alloc,
-    .strndup = default_strndup,
-};
+static const ezgrpc2_allocator default_allocator = DEFAULT_ALLOCATOR;
+static ezgrpc2_allocator current = DEFAULT_ALLOCATOR;
 
 EZGRPC2_API void ezgrpc2_set_allocator(const ezgrpc2_allocator *allocator) {
   if (allocator == nullptr) {
-    g_ezgrpc2_current_allocator = g_ezgrpc2_default_allocator;
+    current = default_allocator;
     return;
   }
   if (allocator->malloc)
-    g_ezgrpc2_current_allocator.malloc = allocator->malloc;
+    current.malloc = allocator->malloc;
   if (allocator->calloc)
-    g_ezgrpc2_current_allocator.calloc = allocator->calloc;
+    current.calloc = allocator->calloc;
   if (allocator->realloc)
-    g_ezgrpc2_current_allocator.realloc = allocator->realloc;
+    current.realloc = allocator->realloc;
   if (allocator->free)
-    g_ezgrpc2_current_allocator.free = allocator->free;
+    current.free = allocator->free;
   if (allocator->aligned_alloc)
-    g_ezgrpc2_current_allocator.aligned_alloc = allocator->aligned_alloc;
-  if (allocator->strndup)
-    g_ezgrpc2_current_allocator.strndup = allocator->strndup;
+    current.aligned_alloc = allocator->aligned_alloc;
 }
 
 EZGRPC2_API const ezgrpc2_allocator *ezgrpc2_get_allocator(void) {
-  return &g_ezgrpc2_current_allocator;
+  return &current;
 }
 
 EZGRPC2_API const char *ezgrpc2_get_allocator_name(void) {
-  return g_allocator_name;
+  return DEFAULT_NAME;
+}
+
+EZGRPC2_API void *ezgrpc2_malloc(size_t size) {
+  return current.malloc(size);
+}
+
+EZGRPC2_API void *ezgrpc2_calloc(size_t nmemb, size_t size) {
+  return current.calloc(nmemb, size);
+}
+
+EZGRPC2_API void *ezgrpc2_realloc(void *ptr, size_t size) {
+  return current.realloc(ptr, size);
+}
+
+EZGRPC2_API void ezgrpc2_free(void *ptr) {
+  current.free(ptr);
+}
+
+EZGRPC2_API void *ezgrpc2_aligned_alloc(size_t alignment, size_t size) {
+  return current.aligned_alloc(alignment, size);
+}
+
+EZGRPC2_API char *ezgrpc2_strndup(const char *s, size_t n) {
+  if (s == nullptr)
+    return nullptr;
+  size_t len = strnlen(s, n);
+  char *r = current.malloc(len + 1);
+  if (r != nullptr) {
+    memcpy(r, s, len);
+    r[len] = '\0';
+  }
+  return r;
+}
+
+EZGRPC2_API char *ezgrpc2_strdup(const char *s) {
+  return s != nullptr ? ezgrpc2_strndup(s, strlen(s)) : nullptr;
 }

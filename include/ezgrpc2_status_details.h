@@ -3,10 +3,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "defs.h"
-#include "ezgrpc2_grpc_status.h"
-#include "ezgrpc2_metadata.h"
-#include "ezgrpc2_server.h"
+#include "ezgrpc2_call.h"
+#include "ezgrpc2_defs.h"
+#include "ezgrpc2_error.h"
+#include "ezgrpc2_status.h"
 
 #define EZGRPC2_STATUS_DETAILS_TRAILER "grpc-status-details-bin"
 
@@ -31,21 +31,21 @@ EZGRPC2_API char *ezgrpc2_status_details_encode(int32_t code, const char *messag
  * Decodes a 'grpc-status-details-bin' base64 string back into status code,
  * message, and the first detail entry (if present).
  *
- * *out_message and *out_detail_value are allocated with ezgrpc2_malloc
+ * ``*out_message`` and *out_detail_value are allocated with ezgrpc2_malloc
  * (caller frees with ezgrpc2_free).
- * Returns 0 on success, non-zero on error.
  */
-EZGRPC2_API int ezgrpc2_status_details_decode(const char *base64_str, int32_t *out_code,
+EZGRPC2_API ezgrpc2_err ezgrpc2_status_details_decode(const char *base64_str, int32_t *out_code,
                                               char **out_message, char **out_type_url,
                                               uint8_t **out_detail_value, size_t *out_detail_len);
 
 /**
- * Ends a stream with rich error status details attached to trailing metadata
- * ('grpc-status-details-bin' per gRPC Rich Error Model spec).
+ * Finishes a call with rich error details, sent as ``grpc-status-details-bin``
+ * (the gRPC Rich Error Model). Trailers added with ezgrpc2_call_add_trailers()
+ * are sent too.
  */
-EZGRPC2_API int ezgrpc2_server_session_stream_end_with_status_details(
-    ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-    ezgrpc2_grpc_status status, const char *message, const ezgrpc2_status_detail_entry *details,
-    size_t nb_details, const ezgrpc2_metadata_entry *extra_trailers, size_t nb_extra_trailers);
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_finish_with_details(ezgrpc2_call *call, ezgrpc2_status status,
+                                                         const char *message,
+                                                         const ezgrpc2_status_detail_entry *details,
+                                                         size_t nb_details);
 
 #endif /* EZGRPC2_STATUS_DETAILS_H */

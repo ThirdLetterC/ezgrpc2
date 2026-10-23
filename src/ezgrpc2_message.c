@@ -1,33 +1,34 @@
-#include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 #include "core.h"
 #include "ezgrpc2_message.h"
 
-EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new(uint8_t cflag, void *data, size_t data_len) {
-  size_t size = sizeof(ezgrpc2_message) + data_len;
-  ezgrpc2_message *message =
-      aligned_alloc(CONFIG_CACHE_LINE_SIZE, REALIGN(CONFIG_CACHE_LINE_SIZE, size));
+/* messages start on a cache line */
+#define MESSAGE_ALIGN 64
+
+ezgrpc2_message *message_create(u8 cflag, const void *data, size_t len) {
+  if (len > UINT32_MAX)
+    return nullptr;
+  size_t size = sizeof(ezgrpc2_message) + len;
+  ezgrpc2_message *message = ezgrpc2_aligned_alloc(MESSAGE_ALIGN, REALIGN(MESSAGE_ALIGN, size));
   if (message == nullptr)
     return nullptr;
+  message->len = (uint32_t)len;
   message->cflag = cflag;
-  if (data_len && data)
-    memcpy(message->data, data, data_len);
-  message->len = (uint32_t)data_len;
+  if (data != nullptr && len > 0)
+    memcpy(message->data, data, len);
   return message;
 }
 
-EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new2(size_t data_len) {
-  size_t size = sizeof(ezgrpc2_message) + data_len;
-  ezgrpc2_message *message =
-      aligned_alloc(CONFIG_CACHE_LINE_SIZE, REALIGN(CONFIG_CACHE_LINE_SIZE, size));
-  if (message == nullptr)
+EZGRPC2_API ezgrpc2_message *ezgrpc2_message_new(const void *data, size_t len) {
+  if (data == nullptr && len > 0)
     return nullptr;
-  message->len = (uint32_t)data_len;
-  message->cflag = 0;
-  return message;
+  return message_create(0, data, len);
+}
+
+EZGRPC2_API ezgrpc2_message *ezgrpc2_message_alloc(size_t len) {
+  return message_create(0, nullptr, len);
 }
 
 EZGRPC2_API void ezgrpc2_message_free(ezgrpc2_message *message) {
-  free(message);
+  ezgrpc2_free(message);
 }

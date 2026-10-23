@@ -1,7 +1,7 @@
 #ifndef EZGRPC2_FLATCC_H
 #define EZGRPC2_FLATCC_H
 
-#include "defs.h"
+#include "ezgrpc2_defs.h"
 
 /* alignas and alignof are keywords in C23. flatcc's portable layer would
  * otherwise define them as macros, which clang warns about */
@@ -12,8 +12,9 @@
 
 #include <flatcc/flatcc_builder.h>
 #include <flatcc/flatcc_verifier.h>
+#include "ezgrpc2_call.h"
+#include "ezgrpc2_error.h"
 #include "ezgrpc2_message.h"
-#include "ezgrpc2_messages.h"
 
 /**
  * FlatBuffers support through flatcc (https://github.com/dvidelabs/flatcc).
@@ -30,10 +31,8 @@
  * Initializes a flatcc builder whose working memory comes from the active
  * ezgrpc2 allocator (libc, mimalloc, jemalloc, or custom).
  * Release it with ``flatcc_builder_clear()``.
- *
- * @return 0 on success, non-zero on failure.
  */
-EZGRPC2_API int ezgrpc2_fb_builder_init(flatcc_builder_t *builder);
+EZGRPC2_API ezgrpc2_err ezgrpc2_fb_builder_init(flatcc_builder_t *builder);
 
 /**
  * Verifies that a received message holds a valid FlatBuffer whose root table
@@ -75,19 +74,15 @@ EZGRPC2_API const void *ezgrpc2_fb_unpack(const ezgrpc2_message *message, const 
  * Copies the buffer finished in ``builder`` into a newly allocated
  * ezgrpc2_message, then resets the builder so it can build the next one.
  *
- * @param compressed_flag gRPC compression flag (usually 0).
- * @return A message ready to be sent, or nullptr if no buffer was finished
- *         or allocation failed.
+ * @return The message, or nullptr if no buffer was finished or allocation
+ *         failed.
  */
-EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder, uint8_t compressed_flag);
+EZGRPC2_API ezgrpc2_message *ezgrpc2_fb_pack(flatcc_builder_t *builder);
 
 /**
- * Convenience helper: packs the buffer finished in ``builder`` and wraps it
- * into a new ezgrpc2_messages list ready to be passed to
- * ezgrpc2_server_session_stream_send(). The builder is reset.
- *
- * @return A new list holding one message, or nullptr on failure.
+ * Sends the buffer finished in ``builder`` on ``call``, like
+ * ezgrpc2_call_send(), and resets the builder.
  */
-EZGRPC2_API ezgrpc2_messages *ezgrpc2_fb_create_response(flatcc_builder_t *builder);
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_fb(ezgrpc2_call *call, flatcc_builder_t *builder);
 
 #endif /* EZGRPC2_FLATCC_H */

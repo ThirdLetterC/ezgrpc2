@@ -1,62 +1,17 @@
 #ifndef EZGRPC2_DEFS_H
 #define EZGRPC2_DEFS_H
 
-#include <stdlib.h>
+#include <stdbool.h>
 #include <stddef.h>
-
-#if defined(__has_include)
-#if __has_include(<stdalign.h>)
-#include <stdalign.h>
-#endif
-#else
-#include <stdalign.h>
-#endif
-
-#ifndef alignof
-#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
-#define alignof _Alignof
-#endif
-#endif
-
-#ifndef nullptr
-#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
-#define nullptr ((void *)0)
-#endif
-#endif
-
-#define REALIGN(alignment, size) (((size) + ((alignment) - 1)) & ~((alignment) - 1))
-
-#ifdef __ANDROID__
-#include <android/api-level.h>
-#if __ANDROID_API__ < 28
-static inline void *aligned_alloc(size_t alignment, size_t size) {
-  void *ret = nullptr;
-  if (posix_memalign(&ret, alignment, size))
-    return nullptr;
-  return ret;
-}
-
-#endif /* __ANDROID_API__ < 28 */
-#endif /* __ANDROID__ */
+#include <stdint.h>
 
 #ifndef EZGRPC2_API
 #define EZGRPC2_API __attribute__((visibility("default")))
 #endif
 
-#if __has_builtin(__builtin_expect)
-#define likely(x)   __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#else
-#define likely(x)   (x)
-#define unlikely(x) (x)
-#endif /* __has_builtin(__builtin_expect) */
-
-#ifndef CONFIG_PATH_MAX_LEN
-#define CONFIG_PATH_MAX_LEN 32
+/* the headers are written in C23; this keeps them usable from C11 and C17 */
+#if !defined(nullptr) && (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
+#define nullptr ((void *)0)
 #endif
 
-#ifndef CONFIG_STREAM_MAX_HEADERS
-#define CONFIG_STREAM_MAX_HEADERS 32
-#endif
-
-#endif
+#endif /* EZGRPC2_DEFS_H */

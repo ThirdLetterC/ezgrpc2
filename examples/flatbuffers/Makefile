@@ -1,7 +1,7 @@
 -include ../../config.mk
 
 CFLAGS += -I../../include
-LDFLAGS += -L../../src -l:libezgrpc2.a -lnghttp2 -lz $(TLS_LIBS) $(FLATCC_LIBS) -lpthread -luv -luuid
+LDFLAGS += -L../../src -l:libezgrpc2.a $(EZGRPC2_DEPS)
 
 PYTHON ?= python3
 

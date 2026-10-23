@@ -1,9 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "ezgrpc2_status_details.h"
-#include "ezgrpc2_metadata.h"
-#include "ezgrpc2_session.h"
-#include "ezgrpc2_mem.h"
+#include "core.h"
 
 static size_t varint_size(uint64_t val) {
   size_t size = 0;
@@ -128,17 +125,17 @@ EZGRPC2_API char *ezgrpc2_status_details_encode(int32_t code, const char *messag
   return b64;
 }
 
-EZGRPC2_API int ezgrpc2_status_details_decode(const char *base64_str, int32_t *out_code,
+EZGRPC2_API ezgrpc2_err ezgrpc2_status_details_decode(const char *base64_str, int32_t *out_code,
                                               char **out_message, char **out_type_url,
                                               uint8_t **out_detail_value, size_t *out_detail_len) {
   if (base64_str == nullptr) {
-    return 1;
+    return EZGRPC2_ERR_INVALID;
   }
 
   size_t raw_len = 0;
   uint8_t *raw = ezgrpc2_metadata_decode_bin(base64_str, strlen(base64_str), &raw_len);
   if (raw == nullptr) {
-    return 2;
+    return EZGRPC2_ERR_INVALID;
   }
 
   if (out_code)
@@ -223,44 +220,31 @@ EZGRPC2_API int ezgrpc2_status_details_decode(const char *base64_str, int32_t *o
   }
 
   ezgrpc2_free(raw);
-  return 0;
+  return EZGRPC2_OK;
 }
 
-EZGRPC2_API int ezgrpc2_server_session_stream_end_with_status_details(
-    ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-    ezgrpc2_grpc_status status, const char *message, const ezgrpc2_status_detail_entry *details,
-    size_t nb_details, const ezgrpc2_metadata_entry *extra_trailers, size_t nb_extra_trailers) {
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_finish_with_details(ezgrpc2_call *call, ezgrpc2_status status,
+                                                         const char *message,
+                                                         const ezgrpc2_status_detail_entry *details,
+                                                         size_t nb_details) {
+  if (call == nullptr || (details == nullptr && nb_details > 0))
+    return EZGRPC2_ERR_INVALID;
+
   size_t b64_len = 0;
   char *b64_status =
       ezgrpc2_status_details_encode((int32_t)status, message, details, nb_details, &b64_len);
+  if (b64_status == nullptr)
+    return EZGRPC2_ERR_NOMEM;
 
-  size_t total_trailers = nb_extra_trailers + (b64_status ? 1 : 0);
-  ezgrpc2_metadata_entry *all_trailers = nullptr;
-  if (total_trailers > 0) {
-    all_trailers = ezgrpc2_malloc(total_trailers * sizeof(*all_trailers));
-    if (all_trailers != nullptr) {
-      for (size_t i = 0; i < nb_extra_trailers; i++) {
-        all_trailers[i] = extra_trailers[i];
-      }
-      if (b64_status != nullptr) {
-        all_trailers[nb_extra_trailers] = (ezgrpc2_metadata_entry){
-            .key = EZGRPC2_STATUS_DETAILS_TRAILER,
-            .key_len = strlen(EZGRPC2_STATUS_DETAILS_TRAILER),
-            .value = b64_status,
-            .value_len = b64_len,
-        };
-      }
-    }
-  }
-
-  int res = ezgrpc2_server_session_stream_end2(server, session_uuid, stream_id, status, message,
-                                               all_trailers, total_trailers);
-
-  if (all_trailers != nullptr) {
-    ezgrpc2_free(all_trailers);
-  }
-  if (b64_status != nullptr) {
-    ezgrpc2_free(b64_status);
-  }
-  return res;
+  ezgrpc2_metadata trailer = {
+      .key = EZGRPC2_STATUS_DETAILS_TRAILER,
+      .key_len = strlen(EZGRPC2_STATUS_DETAILS_TRAILER),
+      .value = b64_status,
+      .value_len = b64_len,
+  };
+  ezgrpc2_err err = ezgrpc2_call_add_trailers(call, &trailer, 1);
+  ezgrpc2_free(b64_status);
+  if (err != EZGRPC2_OK)
+    return err;
+  return ezgrpc2_call_finish(call, status, message);
 }

@@ -2,10 +2,10 @@
 #define EZGRPC2_PROTOBUF_C_H
 
 #include <protobuf-c/protobuf-c.h>
-#include "defs.h"
+#include "ezgrpc2_call.h"
+#include "ezgrpc2_defs.h"
+#include "ezgrpc2_error.h"
 #include "ezgrpc2_message.h"
-#include "ezgrpc2_messages.h"
-#include "ezgrpc2_grpc_status.h"
 
 /**
  * Returns a pointer to a ProtobufCAllocator whose alloc and free function pointers
@@ -34,14 +34,11 @@ EZGRPC2_API ProtobufCMessage *ezgrpc2_pb_unpack(const ProtobufCMessageDescriptor
 #define EZGRPC2_PB_UNPACK(Type, descriptor, msg) ((Type *)ezgrpc2_pb_unpack((descriptor), (msg)))
 
 /**
- * Serializes/packs a ProtobufCMessage into a newly-allocated ezgrpc2_message.
+ * Serializes a ProtobufCMessage into a newly allocated ezgrpc2_message.
  *
- * @param message The ProtobufCMessage to pack.
- * @param compressed_flag gRPC compression flag (usually 0).
- * @return A newly allocated ezgrpc2_message ready to be sent, or nullptr on failure.
+ * @return The message, or nullptr on failure.
  */
-EZGRPC2_API ezgrpc2_message *ezgrpc2_pb_pack(const ProtobufCMessage *message,
-                                             uint8_t compressed_flag);
+EZGRPC2_API ezgrpc2_message *ezgrpc2_pb_pack(const ProtobufCMessage *message);
 
 /**
  * Frees a message previously unpacked via ezgrpc2_pb_unpack.
@@ -57,13 +54,8 @@ EZGRPC2_API void ezgrpc2_pb_free_unpacked(ProtobufCMessage *message);
 #define EZGRPC2_PB_FREE_UNPACKED(msg) ezgrpc2_pb_free_unpacked((ProtobufCMessage *)(msg))
 
 /**
- * Convenience helper: packs a ProtobufCMessage and wraps it into a new ezgrpc2_messages
- * list ready to be passed to ezgrpc2_server_session_stream_send().
- *
- * @param message The ProtobufCMessage to serialize as the response.
- * @return A newly allocated ezgrpc2_messages list containing the packed message,
- *         or nullptr on failure.
+ * Serializes ``message`` and sends it on ``call``, like ezgrpc2_call_send().
  */
-EZGRPC2_API ezgrpc2_messages *ezgrpc2_pb_create_response(const ProtobufCMessage *message);
+EZGRPC2_API ezgrpc2_err ezgrpc2_call_send_pb(ezgrpc2_call *call, const ProtobufCMessage *message);
 
 #endif /* EZGRPC2_PROTOBUF_C_H */

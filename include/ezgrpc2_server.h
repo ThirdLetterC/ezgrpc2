@@ -1,140 +1,169 @@
 #ifndef EZGRPC2_SERVER_H
 #define EZGRPC2_SERVER_H
-#include <stdint.h>
 
-#include "defs.h"
-#include "ezgrpc2_events.h"
-#include "ezgrpc2_http2_settings.h"
-#include "ezgrpc2_server_settings.h"
-#include "ezgrpc2_session_info.h"
-#include "ezgrpc2_session_uuid.h"
-
-#define EZGRPC2_SERVER_LOG_ALL     (uint32_t)0xffffffff
-#define EZGRPC2_SERVER_LOG_QUIET   (uint32_t)(0)
-#define EZGRPC2_SERVER_LOG_NORMAL  (uint32_t)(1)
-#define EZGRPC2_SERVER_LOG_WARNING (uint32_t)(1 << 1)
-#define EZGRPC2_SERVER_LOG_ERROR   (uint32_t)(1 << 2)
-#define EZGRPC2_SERVER_LOG_DEBUG   (uint32_t)(1 << 3)
-#define EZGRPC2_SERVER_LOG_TRACE   (uint32_t)(1 << 4)
-
-#define EZGRPC2_LOG_NORMAL(server, ...) \
-  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_NORMAL, __VA_ARGS__)
-#define EZGRPC2_LOG_ERROR(server, fmt, ...)            \
-  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_ERROR, \
-                     COLSTR("error: " fmt, BHRED) __VA_OPT__(, ) __VA_ARGS__)
-#define EZGRPC2_LOG_WARNING(server, fmt, ...)            \
-  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_WARNING, \
-                     COLSTR("warning: " fmt, BHYEL) __VA_OPT__(, ) __VA_ARGS__)
-
-#ifdef EZGRPC2_DEBUG
-#define EZGRPC2_LOG_DEBUG(server, fmt, ...)                         \
-  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_DEBUG, "@%s: " fmt, \
-                     __func__ __VA_OPT__(, ) __VA_ARGS__)
-#else
-#define EZGRPC2_LOG_DEBUG(server, ...) \
-  do {                                 \
-  } while (0)
-#endif
-
-#ifdef EZGRPC2_TRACE
-#define EZGRPC2_LOG_TRACE(server, fmt, ...)                         \
-  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_TRACE, "@%s: " fmt, \
-                     __func__ __VA_OPT__(, ) __VA_ARGS__)
-#else
-#define EZGRPC2_LOG_TRACE(server, ...) \
-  do {                                 \
-  } while (0)
-#endif
+#include <stdio.h>
+#include "ezgrpc2_call.h"
+#include "ezgrpc2_defs.h"
+#include "ezgrpc2_error.h"
+#include "ezgrpc2_event.h"
 
 typedef struct ezgrpc2_server ezgrpc2_server;
 
-/**
- * An opaque server context struct type returned by :c:func:`ezgrpc2_server_new()`.
- */
-struct ezgrpc2_server;
+typedef enum ezgrpc2_log_level {
+  /** EZGRPC2_LOG_INFO */
+  EZGRPC2_LOG_DEFAULT = 0,
+  EZGRPC2_LOG_OFF,
+  EZGRPC2_LOG_ERROR,
+  EZGRPC2_LOG_WARNING,
+  /** startup and shutdown */
+  EZGRPC2_LOG_INFO,
+  /** connections */
+  EZGRPC2_LOG_DEBUG,
+  /** every HTTP/2 frame, when built with T=1 */
+  EZGRPC2_LOG_TRACE,
+} ezgrpc2_log_level;
 
 /**
- * The :c:func:`ezgrpc2_server_new()` function creates a ezserver context,
- * binding to the associated ``ipv4_addr`` and ``ipv6_addr`` if it's not
- * ``NULL``.
+ * Server configuration. Zero fields take their default, so a designated
+ * initializer only names what differs:
  *
- * At no point ``ipv4_addr`` and ``ipv6_addr`` be ``NULL.``
- *
- * :param settings: Unused. Reserved for future implementation. Must be set to ``NULL``.
- *
- * :returns:
- *
- *     * On success, a pointer to the opaque :c:struct:`ezgrpc2_server`
- *
- *     * On failure, ``NULL``.
- *
- * Example 1:
- *
- * .. code-block:: C
- *
- *    ezgrpc2_server *ezgrpc2_server_new("0.0.0.0", 8080, "::", 8080, 16, NULL);
- *
+ *   ezgrpc2_server *srv = ezgrpc2_server_new(&(ezgrpc2_config){.port = 50051});
  */
-EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const char *restrict ipv4_addr, uint16_t ipv4_port,
-                                               const char *restrict ipv6_addr, uint16_t ipv6_port,
-                                               int backlog,
-                                               ezgrpc2_server_settings *restrict server_settings,
-                                               ezgrpc2_http2_settings *restrict http2_settings);
+typedef struct ezgrpc2_config {
+  /** Port for both address families. Required. */
+  uint16_t port;
+  /** IPv4 address to listen on. When both addresses are nullptr, the server
+   * listens on "0.0.0.0" and "::". When only one is set, only that one. */
+  const char *ipv4_addr;
+  /** IPv6 address to listen on, see ipv4_addr. */
+  const char *ipv6_addr;
+  /** listen() backlog. Default 1024. */
+  int backlog;
+  /** Concurrent connections. Default 1024. */
+  size_t max_connections;
+  /** Concurrent calls per connection. Default 1024. */
+  uint32_t max_concurrent_streams;
+  /** Largest request message, in bytes. Default 1 MiB. */
+  uint32_t max_message_size;
+  /** Largest HTTP/2 frame, in bytes. Default 16 KiB. */
+  uint32_t max_frame_size;
+  /** PEM certificate chain and private key. Setting both enables TLS. */
+  struct {
+    const char *cert_file;
+    const char *key_file;
+  } tls;
+  /** Default EZGRPC2_LOG_INFO. */
+  ezgrpc2_log_level log_level;
+  /** Default stderr. */
+  FILE *log_file;
+} ezgrpc2_config;
 
 /**
- * The :c:func:`ezgrpc2_server_poll()` function polls the server for any clients making a request to paths
- * appointed by ``paths``.
- *
- * If the requested path by the client is not found, a trailer, :c:enumerator:`EZGRPC2_GRPC_STATUS_UNIMPLEMENTED`
- * is automatically sent and closes the associated stream. No event is generated.
- *
- * :returns:
- *
- *    * On an event, a value greater than 0.
- *
- *    * On no event, 0.
- *
- *    * On error, a negative value.
- *
- * .. note::
- *    The ``levents`` needs to be
- *    initialized first with, :c:func:`ezgrpc2_list_init()`.
- *
- *
+ * Handles a method whose client sends a single request: unary and
+ * server-streaming methods. Called once the request is complete. Answer with
+ * ezgrpc2_call_send() (any number of times) and ezgrpc2_call_finish(), now or
+ * later.
  */
-EZGRPC2_API int ezgrpc2_server_poll(ezgrpc2_server *restrict server,
-                                    ezgrpc2_events *restrict events, int timeout);
+typedef void (*ezgrpc2_handler_fn)(ezgrpc2_call *call, const ezgrpc2_message *request,
+                                   void *userdata);
 
 /**
- * The :c:func:`ezgrpc2_server_flush()` function writes the output queued by
- * :c:func:`ezgrpc2_server_session_stream_send()`, :c:func:`ezgrpc2_server_session_stream_end()`
- * and friends.
+ * Handles a method whose client streams requests: client-streaming and
+ * bidirectional methods. Messages are valid until the callback returns.
+ */
+typedef struct ezgrpc2_stream_handler {
+  /** A request message arrived. */
+  void (*on_message)(ezgrpc2_call *call, const ezgrpc2_message *message, void *userdata);
+  /** The client finished sending. Optional. */
+  void (*on_end)(ezgrpc2_call *call, void *userdata);
+  /** The call was cancelled. Optional. */
+  void (*on_cancel)(ezgrpc2_call *call, void *userdata);
+} ezgrpc2_stream_handler;
+
+/**
+ * Creates a server and starts listening. ``config`` may be nullptr only to
+ * fail: ``port`` is required. Returns nullptr on failure, after logging why.
+ */
+EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const ezgrpc2_config *config);
+
+/**
+ * Closes every connection and frees the server. Release the references taken
+ * on its calls first.
+ */
+EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *server);
+
+/**
+ * Registers a handler for a single-request method, e.g.
+ * ``"/helloworld.Greeter/SayHello"``.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_handle(ezgrpc2_server *server, const char *path,
+                                              ezgrpc2_handler_fn handler, void *userdata);
+
+/**
+ * Registers handlers for a method whose client streams requests.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_handle_stream(ezgrpc2_server *server, const char *path,
+                                                     const ezgrpc2_stream_handler *handler,
+                                                     void *userdata);
+
+/**
+ * Registers a method whose calls are reported as events instead of
+ * dispatched to a handler; see ezgrpc2_server_poll().
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path,
+                                                     void *userdata);
+
+/**
+ * Stops accepting new calls to a method. Calls in progress are unaffected.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_unregister(ezgrpc2_server *server, const char *path);
+
+/**
+ * Serves until ezgrpc2_server_stop() is called.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_run(ezgrpc2_server *server);
+
+/**
+ * Makes ezgrpc2_server_run() return. Safe to call from any thread and from a
+ * signal handler.
+ */
+EZGRPC2_API void ezgrpc2_server_stop(ezgrpc2_server *server);
+
+/**
+ * Runs one iteration of the event loop: writes the responses queued since
+ * the last call, waits up to ``timeout_ms`` (-1: no limit, 0: no wait) for
+ * network activity, and dispatches handlers.
  *
- * Those functions only queue frames. Everything queued for a session, across all of
- * its streams, is written with a single write when :c:func:`ezgrpc2_server_poll()` is
- * called next, so most applications never need this function. Call it when the next
- * poll may be delayed.
+ * Returns the number of events of ezgrpc2_server_register_path() methods,
+ * read with ezgrpc2_server_events(), or a negative ezgrpc2_err.
+ */
+EZGRPC2_API int ezgrpc2_server_poll(ezgrpc2_server *server, int timeout_ms);
+
+/**
+ * The events of the last ezgrpc2_server_poll(), valid until the next one.
+ */
+EZGRPC2_API const ezgrpc2_event *ezgrpc2_server_events(ezgrpc2_server *server, size_t *count);
+
+/**
+ * Writes the queued responses now instead of at the next poll.
  */
 EZGRPC2_API void ezgrpc2_server_flush(ezgrpc2_server *server);
 
-EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path,
-                                             void *userdata, uint64_t accept_content_type,
-                                             uint64_t accept_content_encoding);
+/**
+ * Runs ``fn(arg)`` on the server thread soon. Safe to call from any thread:
+ * this is how worker threads hand results back.
+ */
+EZGRPC2_API ezgrpc2_err ezgrpc2_server_post(ezgrpc2_server *server, void (*fn)(void *arg),
+                                            void *arg);
 
-EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, const char *path);
+/**
+ * The TLS library's own context, see ezgrpc2_tls.h. nullptr without TLS.
+ */
+EZGRPC2_API void *ezgrpc2_server_tls_native(ezgrpc2_server *server);
 
-EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *server);
+/**
+ * The license text of ezgrpc2.
+ */
+EZGRPC2_API const char *ezgrpc2_license(void);
 
-ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server);
-
-EZGRPC2_API ezgrpc2_session_info *
-ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server,
-                                ezgrpc2_session_uuid *restrict session_uuid);
-
-EZGRPC2_API ezgrpc2_server_settings *ezgrpc2_server_get_server_settings(ezgrpc2_server *server);
-EZGRPC2_API ezgrpc2_http2_settings *ezgrpc2_server_get_http2_settings(ezgrpc2_server *server);
-
-EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level,
-                                    const char *restrict fmt, ...);
-
-#endif
+#endif /* EZGRPC2_SERVER_H */
