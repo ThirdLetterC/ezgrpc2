@@ -125,8 +125,8 @@ struct ezgrpc2_call {
   ezgrpc2_status cancel_reason;
 
   bool headers_sent : 1;
-  /* The client announced grpc-encoding: gzip. */
-  bool gzip : 1;
+  /* Encoding announced with the first compressed response message. */
+  ezgrpc2_compression_algorithm compression;
   bool finished : 1;
   bool closed : 1;
   bool cancelled : 1;
@@ -184,6 +184,7 @@ struct ezgrpc2_stream {
   /* These values point into headers. */
   const char *hcontent_type;
   const char *hgrpc_encoding;
+  ezgrpc2_compression_algorithm grpc_encoding;
   const char *hgrpc_accept_encoding;
   const char *hgrpc_timeout;
 

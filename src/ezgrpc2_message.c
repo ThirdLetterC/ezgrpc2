@@ -16,6 +16,8 @@ ezgrpc2_message *message_create(u8 cflag, const void *data, size_t len) {
     return nullptr;
   message->len = (uint32_t)len;
   message->cflag = cflag;
+  message->compression = EZGRPC2_COMPRESS_IDENTITY;
+  message->compression_level = -1;
   if (data != nullptr && len > 0)
     memcpy(message->data, data, len);
   return message;

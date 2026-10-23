@@ -57,9 +57,39 @@ void test_message_compress_decompress(void) {
   ezgrpc2_message_free(decomp);
 }
 
+void test_configurable_codecs_roundtrip(void) {
+  const char sample[] = "codec selection and level configuration round trip";
+  const ezgrpc2_compression_algorithm algorithms[] = {
+      EZGRPC2_COMPRESS_GZIP, EZGRPC2_COMPRESS_DEFLATE,
+#if defined(EZGRPC2_ENABLE_ZSTD)
+      EZGRPC2_COMPRESS_ZSTD,
+#endif
+#if defined(EZGRPC2_ENABLE_SNAPPY)
+      EZGRPC2_COMPRESS_SNAPPY,
+#endif
+  };
+  for (size_t i = 0; i < sizeof(algorithms) / sizeof(algorithms[0]); ++i) {
+    int level = algorithms[i] == EZGRPC2_COMPRESS_SNAPPY
+                    ? EZGRPC2_COMPRESSION_LEVEL_DEFAULT
+                    : algorithms[i] == EZGRPC2_COMPRESS_ZSTD ? 3 : 6;
+    uint8_t *packed = nullptr, *unpacked = nullptr;
+    size_t packed_len = 0, unpacked_len = 0;
+    TEST_ASSERT_EQUAL_INT(0, ezgrpc2_compress(algorithms[i], level, (const uint8_t *)sample,
+                                              sizeof(sample) - 1, &packed, &packed_len));
+    TEST_ASSERT_NOT_NULL(packed);
+    TEST_ASSERT_EQUAL_INT(0, ezgrpc2_decompress(algorithms[i], packed, packed_len, &unpacked,
+                                                &unpacked_len));
+    TEST_ASSERT_EQUAL_UINT64(sizeof(sample) - 1, unpacked_len);
+    TEST_ASSERT_EQUAL_MEMORY(sample, unpacked, unpacked_len);
+    ezgrpc2_free(packed);
+    ezgrpc2_free(unpacked);
+  }
+}
+
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_gzip_compression_roundtrip);
   RUN_TEST(test_message_compress_decompress);
+  RUN_TEST(test_configurable_codecs_roundtrip);
   return UNITY_END();
 }

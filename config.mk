@@ -81,6 +81,23 @@ ifeq ($(ZLIB),1)
   ZLIB_LIBS = -lz
 endif
 
+# Optional Zstandard and Snappy codecs.
+ifeq ($(origin ZSTD), undefined)
+  ZSTD := $(shell (pkg-config --exists libzstd 2>/dev/null || test -f /usr/include/zstd.h) && echo 1 || echo 0)
+endif
+ifeq ($(ZSTD),1)
+  CFLAGS += -DEZGRPC2_ENABLE_ZSTD $(shell pkg-config --cflags libzstd 2>/dev/null)
+  ZSTD_LIBS = $(shell pkg-config --libs libzstd 2>/dev/null || echo "-lzstd")
+endif
+
+ifeq ($(origin SNAPPY), undefined)
+  SNAPPY := $(shell (pkg-config --exists snappy 2>/dev/null || test -f /usr/include/snappy-c.h) && echo 1 || echo 0)
+endif
+ifeq ($(SNAPPY),1)
+  CFLAGS += -DEZGRPC2_ENABLE_SNAPPY $(shell pkg-config --cflags snappy 2>/dev/null)
+  SNAPPY_LIBS = $(shell pkg-config --libs snappy 2>/dev/null || echo "-lsnappy")
+endif
+
 # Libuv event loop:
 LIBUV_CFLAGS ?= $(shell pkg-config --cflags libuv 2>/dev/null)
 LIBUV_LIBS ?= $(shell pkg-config --libs libuv 2>/dev/null || echo "-luv")
@@ -188,4 +205,4 @@ endif
 
 # Everything libezgrpc2.a needs. It must follow the library on the link line:
 #   $(CC) app.o -o app $(LDFLAGS) -l:libezgrpc2.a $(EZGRPC2_DEPS)
-EZGRPC2_DEPS = -lnghttp2 $(LIBUV_LIBS) $(ZLIB_LIBS) $(TLS_LIBS) $(FLATCC_LIBS) $(PROTOBUF_LIBS) $(ALLOC_LIBS) -lpthread
+EZGRPC2_DEPS = -lnghttp2 $(LIBUV_LIBS) $(ZLIB_LIBS) $(ZSTD_LIBS) $(SNAPPY_LIBS) $(TLS_LIBS) $(FLATCC_LIBS) $(PROTOBUF_LIBS) $(ALLOC_LIBS) -lpthread

@@ -9,6 +9,14 @@
 
 typedef struct ezgrpc2_message ezgrpc2_message;
 
+typedef enum {
+  EZGRPC2_COMPRESS_IDENTITY = 0,
+  EZGRPC2_COMPRESS_GZIP = 1,
+  EZGRPC2_COMPRESS_DEFLATE = 2,
+  EZGRPC2_COMPRESS_ZSTD = 3,
+  EZGRPC2_COMPRESS_SNAPPY = 4,
+} ezgrpc2_compression_algorithm;
+
 /**
  * A gRPC message: one serialized request or response.
  */
@@ -17,6 +25,10 @@ struct ezgrpc2_message {
   uint32_t len;
   /** 1 if ``data`` is compressed (the gRPC Compressed-Flag), otherwise 0. */
   uint8_t cflag;
+  /** Encoding used when cflag is 1; ignored for uncompressed messages. */
+  ezgrpc2_compression_algorithm compression;
+  /** Codec level, or EZGRPC2_COMPRESSION_LEVEL_DEFAULT. */
+  int compression_level;
   /** The payload, aligned like ``malloc()`` memory, so formats that are read
    * in place (FlatBuffers) can use it directly. */
   alignas(max_align_t) uint8_t data[];

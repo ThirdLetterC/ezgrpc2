@@ -19,7 +19,7 @@
 - **Server reflection**: `grpc.reflection.v1` and `v1alpha` `ServerReflectionInfo`.
 - **Metadata**: read request headers, send initial metadata and trailers, and Base64 `*-bin` values.
 - **Deadlines**: `grpc-timeout` is parsed. Expired streams are ended with `DEADLINE_EXCEEDED` and reported as `EZGRPC2_EVENT_TIMEOUT`.
-- **Gzip compression**: zlib-backed compression and decompression of messages.
+- **Message compression**: gzip and deflate through zlib, plus optional Zstandard and Snappy codecs. Select the codec and compression level per message.
 - **Rich error model**: `google.rpc.Status` with `Any` details (e.g. `ErrorInfo`) sent in `grpc-status-details-bin`.
 - **Pluggable allocators**: libc `malloc`, `mimalloc`, `jemalloc`, or your own allocator set at runtime.
 
@@ -102,7 +102,9 @@ Numbers depend on hardware and on the client. A single `ghz` process with its de
   - `pthread`
 - **Optional libraries** (detected automatically when installed):
   - A TLS library for TLS: OpenSSL by default, or one of the [other backends](#tls-backends)
-  - `zlib` for Gzip compression
+  - `zlib` for gzip and deflate compression
+  - `libzstd` for Zstandard compression
+  - `libsnappy` for Snappy compression
   - `protobuf-c` for the Protobuf-C helpers
   - `flatcc` for the FlatBuffers helpers (no distribution package: build it with `scripts/build-flatcc.sh`)
   - `mimalloc` or `jemalloc` as the allocator (selected at build time)
@@ -113,7 +115,7 @@ On Debian / Ubuntu:
 sudo apt-get update
 sudo apt-get install -y \
   build-essential pkg-config libuv1-dev libnghttp2-dev uuid-dev \
-  zlib1g-dev libssl-dev libprotobuf-c-dev protobuf-c-compiler \
+  zlib1g-dev libzstd-dev libsnappy-dev libssl-dev libprotobuf-c-dev protobuf-c-compiler \
   libmimalloc-dev libjemalloc-dev   # optional allocators
 ```
 
@@ -142,8 +144,27 @@ To build your own server against it, add `include/` to the include path and link
 
 ```bash
 cc -std=c23 -D_GNU_SOURCE -Iinclude my_server.c -o my_server \
-  -Lsrc -l:libezgrpc2.a -luv -lnghttp2 -luuid -lpthread -lssl -lcrypto -lz
+  -Lsrc -l:libezgrpc2.a -luv -lnghttp2 -luuid -lpthread -lssl -lcrypto -lz -lzstd -lsnappy
 ```
+
+### Compression
+
+The previous implementation provided gzip helpers only. Gzip and deflate both use zlib; deflate uses the zlib-wrapped DEFLATE stream used by gRPC. Zstandard (`zstd`) and Snappy (`snappy`) are detected at build time when their development libraries are installed. Set `ZSTD=0` or `SNAPPY=0` to disable either optional codec.
+
+Compression remains explicit and per message. The server sends the corresponding `grpc-encoding` header when the first response message is compressed, and advertises the codecs enabled in that build. For example:
+
+```c
+ezgrpc2_message *response = ezgrpc2_message_new(payload, payload_len);
+ezgrpc2_message *compressed = ezgrpc2_message_compress(
+    response, EZGRPC2_COMPRESS_ZSTD, 5);  // Zstandard level 5
+ezgrpc2_message_free(response);
+if (compressed != nullptr)
+    ezgrpc2_call_send(call, compressed);   // call_send takes ownership
+```
+
+Use `EZGRPC2_COMPRESS_GZIP` or `EZGRPC2_COMPRESS_DEFLATE` with zlib levels `0` through `9`; use `EZGRPC2_COMPRESSION_LEVEL_DEFAULT` for the library default. Zstandard accepts levels supported by the installed Zstandard library. Snappy has no level control and requires `EZGRPC2_COMPRESSION_LEVEL_DEFAULT`. The legacy `ezgrpc2_message_compress_gzip()` and raw gzip functions remain available.
+
+Zstandard and Snappy are library-specific gRPC encodings. A peer must support the same encoding token to interoperate; standard gRPC implementations commonly support gzip and identity, while support for deflate, Zstandard and Snappy varies.
 
 Add `-lprotobuf-c` when the Protobuf-C helpers are built, `-lflatccrt` when the FlatBuffers helpers are, and the allocator library (`-lmimalloc` or `-ljemalloc`) when one is selected.
 

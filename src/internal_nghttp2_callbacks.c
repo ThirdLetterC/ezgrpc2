@@ -12,7 +12,8 @@
 #include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
 
-static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_messages **messages) {
+static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_compression_algorithm encoding,
+                                 ezgrpc2_messages **messages) {
   i8 *wire = data;
   *messages = nullptr;
   /* quick check if there's any message to parse */
@@ -41,7 +42,7 @@ static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_messages **mess
     if (cflag == 1) {
       uint8_t *decomp = nullptr;
       size_t decomp_len = 0;
-      if (ezgrpc2_decompress_gzip((const uint8_t *)msg_data, msg_len, &decomp, &decomp_len) == 0) {
+      if (ezgrpc2_decompress(encoding, (const uint8_t *)msg_data, msg_len, &decomp, &decomp_len) == 0) {
         msg = message_create(0, decomp, decomp_len);
         ezgrpc2_free(decomp);
       } else {
@@ -189,6 +190,11 @@ static int on_header_callback2([[maybe_unused]] nghttp2_session *session,
     ezstream->is_content_grpc = header_starts_with(value, valuelen, "application/grpc");
   } else if (header_matches(name, namelen, "grpc-encoding")) {
     ezstream->hgrpc_encoding = (const char *)value;
+    if (header_matches(value, valuelen, "gzip")) ezstream->grpc_encoding = EZGRPC2_COMPRESS_GZIP;
+    else if (header_matches(value, valuelen, "deflate")) ezstream->grpc_encoding = EZGRPC2_COMPRESS_DEFLATE;
+    else if (header_matches(value, valuelen, "zstd")) ezstream->grpc_encoding = EZGRPC2_COMPRESS_ZSTD;
+    else if (header_matches(value, valuelen, "snappy")) ezstream->grpc_encoding = EZGRPC2_COMPRESS_SNAPPY;
+    else ezstream->grpc_encoding = EZGRPC2_COMPRESS_IDENTITY;
   } else if (header_matches(name, namelen, "grpc-accept-encoding")) {
     ezstream->hgrpc_accept_encoding = (const char *)value;
   } else if (header_matches(name, namelen, "grpc-timeout")) {
@@ -307,7 +313,8 @@ static inline int on_frame_recv_data(ezgrpc2_session *ezsession, const nghttp2_f
   ezgrpc2_call *call = ezstream->call;
 
   ezgrpc2_messages *messages;
-  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len, &messages);
+  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len,
+                                    ezstream->grpc_encoding, &messages);
   if (lseek) {
     assert(lseek <= ezstream->recv_len);
     memmove(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);

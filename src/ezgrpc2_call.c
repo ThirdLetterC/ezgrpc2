@@ -259,13 +259,38 @@ static char *encode_grpc_message(const char *message, size_t *len) {
 
 static ezgrpc2_err submit_response_headers(ezgrpc2_call *call, uint8_t flags,
                                            const nghttp2_nv *extra, size_t nb_extra) {
+#if defined(EZGRPC2_ENABLE_ZLIB)
+#define ACCEPT_ZLIB "gzip,deflate,"
+#else
+#define ACCEPT_ZLIB ""
+#endif
+#if defined(EZGRPC2_ENABLE_ZSTD) && defined(EZGRPC2_ENABLE_SNAPPY)
+  const char *accepted = ACCEPT_ZLIB "zstd,snappy,identity";
+#elif defined(EZGRPC2_ENABLE_ZSTD)
+  const char *accepted = ACCEPT_ZLIB "zstd,identity";
+#elif defined(EZGRPC2_ENABLE_SNAPPY)
+  const char *accepted = ACCEPT_ZLIB "snappy,identity";
+#else
+  const char *accepted = ACCEPT_ZLIB "identity";
+#endif
+#undef ACCEPT_ZLIB
   nghttp2_nv base[] = {
       NGHTTP2_NV(":status", "200"),
       NGHTTP2_NV("content-type", "application/grpc"),
-      NGHTTP2_NV("grpc-accept-encoding", "gzip,identity"),
+      { (uint8_t *)"grpc-accept-encoding", (uint8_t *)accepted, sizeof("grpc-accept-encoding") - 1, 0, NGHTTP2_NV_FLAG_NONE },
       NGHTTP2_NV("grpc-encoding", "gzip"),
   };
-  size_t nb_base = call->gzip ? 4 : 3;
+  const char *encoding = "gzip";
+  switch (call->compression) {
+  case EZGRPC2_COMPRESS_DEFLATE: encoding = "deflate"; break;
+  case EZGRPC2_COMPRESS_ZSTD: encoding = "zstd"; break;
+  case EZGRPC2_COMPRESS_SNAPPY: encoding = "snappy"; break;
+  default: break;
+  }
+  base[2].valuelen = strlen(accepted);
+  base[3].value = (uint8_t *)encoding;
+  base[3].valuelen = strlen(encoding);
+  size_t nb_base = call->compression != EZGRPC2_COMPRESS_IDENTITY ? 4 : 3;
   size_t total = nb_base + call->headers.len + nb_extra;
   nghttp2_nv *nva = ezgrpc2_malloc(total * sizeof(*nva));
   if (nva == nullptr)
@@ -396,13 +421,14 @@ EZGRPC2_API ezgrpc2_err ezgrpc2_call_send(ezgrpc2_call *call, ezgrpc2_message *m
   }
 
   if (!call->headers_sent) {
-    call->gzip = message->cflag != 0;
+    call->compression = message->cflag ? message->compression : EZGRPC2_COMPRESS_IDENTITY;
     err = submit_response_headers(call, NGHTTP2_FLAG_NONE, nullptr, 0);
     if (err != EZGRPC2_OK) {
       ezgrpc2_message_free(message);
       return err;
     }
-  } else if (message->cflag != 0 && !call->gzip) {
+  } else if (message->cflag != 0 &&
+             (call->compression == EZGRPC2_COMPRESS_IDENTITY || message->compression != call->compression)) {
     /* the encoding was announced with the first message */
     ezgrpc2_message_free(message);
     return EZGRPC2_ERR_STATE;
