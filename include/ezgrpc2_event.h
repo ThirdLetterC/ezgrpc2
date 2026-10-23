@@ -23,7 +23,7 @@ typedef struct ezgrpc2_event {
   ezgrpc2_event_type type;
   /** The call. Valid until the next poll. */
   ezgrpc2_call *call;
-  /** EZGRPC2_EVENT_MESSAGE: the message. Valid until the next poll. */
+  /** The message for EZGRPC2_EVENT_MESSAGE; valid until the next poll. */
   const ezgrpc2_message *message;
   /** The userdata given to ezgrpc2_server_register_path(). */
   void *userdata;

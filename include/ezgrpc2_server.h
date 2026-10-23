@@ -10,16 +10,16 @@
 typedef struct ezgrpc2_server ezgrpc2_server;
 
 typedef enum ezgrpc2_log_level {
-  /** EZGRPC2_LOG_INFO */
+  /** Use the default level, EZGRPC2_LOG_INFO. */
   EZGRPC2_LOG_DEFAULT = 0,
   EZGRPC2_LOG_OFF,
   EZGRPC2_LOG_ERROR,
   EZGRPC2_LOG_WARNING,
-  /** startup and shutdown */
+  /** Startup and shutdown messages. */
   EZGRPC2_LOG_INFO,
-  /** connections */
+  /** Connection messages. */
   EZGRPC2_LOG_DEBUG,
-  /** every HTTP/2 frame, when built with T=1 */
+  /** Every HTTP/2 frame, when built with T=1. */
   EZGRPC2_LOG_TRACE,
 } ezgrpc2_log_level;
 
@@ -35,7 +35,7 @@ typedef struct ezgrpc2_config {
   /** IPv4 address to listen on. When both addresses are nullptr, the server
    * listens on "0.0.0.0" and "::". When only one is set, only that one. */
   const char *ipv4_addr;
-  /** IPv6 address to listen on, see ipv4_addr. */
+  /** IPv6 address to listen on; see ipv4_addr. */
   const char *ipv6_addr;
   /** listen() backlog. Default 1024. */
   int backlog;
@@ -52,9 +52,9 @@ typedef struct ezgrpc2_config {
     const char *cert_file;
     const char *key_file;
   } tls;
-  /** Default EZGRPC2_LOG_INFO. */
+  /** Initial log threshold. Defaults to EZGRPC2_LOG_INFO. */
   ezgrpc2_log_level log_level;
-  /** Default stderr. */
+  /** Log output stream. Defaults to stderr. */
   FILE *log_file;
 } ezgrpc2_config;
 

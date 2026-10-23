@@ -4,20 +4,21 @@
 
 #if defined(EZGRPC2_USE_MIMALLOC)
 #include <mimalloc.h>
-#define DEFAULT_NAME "mimalloc"
-#define DEFAULT_ALLOCATOR                                                                          \
-  {mi_malloc, mi_calloc, mi_realloc, mi_free, mi_aligned_alloc}
+static constexpr char default_allocator_name[] = "mimalloc";
+static const ezgrpc2_allocator default_allocator = {mi_malloc, mi_calloc, mi_realloc, mi_free,
+                                                    mi_aligned_alloc};
+static ezgrpc2_allocator current = {mi_malloc, mi_calloc, mi_realloc, mi_free,
+                                    mi_aligned_alloc};
 #elif defined(EZGRPC2_USE_JEMALLOC)
 /* jemalloc replaces the libc functions when linked */
-#define DEFAULT_NAME      "jemalloc"
-#define DEFAULT_ALLOCATOR {malloc, calloc, realloc, free, aligned_alloc}
+static constexpr char default_allocator_name[] = "jemalloc";
+static const ezgrpc2_allocator default_allocator = {malloc, calloc, realloc, free, aligned_alloc};
+static ezgrpc2_allocator current = {malloc, calloc, realloc, free, aligned_alloc};
 #else
-#define DEFAULT_NAME      "libc"
-#define DEFAULT_ALLOCATOR {malloc, calloc, realloc, free, aligned_alloc}
+static constexpr char default_allocator_name[] = "libc";
+static const ezgrpc2_allocator default_allocator = {malloc, calloc, realloc, free, aligned_alloc};
+static ezgrpc2_allocator current = {malloc, calloc, realloc, free, aligned_alloc};
 #endif
-
-static const ezgrpc2_allocator default_allocator = DEFAULT_ALLOCATOR;
-static ezgrpc2_allocator current = DEFAULT_ALLOCATOR;
 
 EZGRPC2_API void ezgrpc2_set_allocator(const ezgrpc2_allocator *allocator) {
   if (allocator == nullptr) {
@@ -41,7 +42,7 @@ EZGRPC2_API const ezgrpc2_allocator *ezgrpc2_get_allocator(void) {
 }
 
 EZGRPC2_API const char *ezgrpc2_get_allocator_name(void) {
-  return DEFAULT_NAME;
+  return default_allocator_name;
 }
 
 EZGRPC2_API void *ezgrpc2_malloc(size_t size) {

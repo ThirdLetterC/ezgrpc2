@@ -73,8 +73,7 @@ static ezgrpc2_call *queue_pop(void) {
   return call;
 }
 
-static void *worker(void *arg) {
-  (void)arg;
+static void *worker([[maybe_unused]] void *arg) {
   ezgrpc2_call *call;
   while ((call = queue_pop()) != nullptr) {
     /* the request stays valid as long as the call */

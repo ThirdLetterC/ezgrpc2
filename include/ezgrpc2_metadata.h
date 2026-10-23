@@ -26,7 +26,7 @@ EZGRPC2_API uint8_t *ezgrpc2_metadata_decode_bin(const char *base64, size_t len,
 
 /**
  * Base64 encodes binary data for a ``-bin`` key.
- * Returns a NULL-terminated string to free with ezgrpc2_free(), or nullptr.
+ * Returns a NUL-terminated string to free with ezgrpc2_free(), or nullptr.
  */
 EZGRPC2_API char *ezgrpc2_metadata_encode_bin(const uint8_t *data, size_t len, size_t *out_len);
 

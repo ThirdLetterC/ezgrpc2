@@ -11,9 +11,8 @@ struct eznode_t {
 };
 
 struct ezgrpc2_list {
-  /* it's better to visualize this list as */
-  /* front ---------------------> back */
-  /* front->prev is always NULL and back next is always NULL */
+  /* Think of the list as front -> back. The front has no previous node, and
+   * the back has no next node. */
   eznode_t *front;
   eznode_t *back;
   size_t count;

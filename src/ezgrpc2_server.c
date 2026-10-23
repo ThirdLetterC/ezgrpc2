@@ -12,11 +12,11 @@
 #include "internal_nghttp2_callbacks.h"
 #include "ulog/ulog.h"
 
-#define DEFAULT_BACKLOG                1024
-#define DEFAULT_MAX_CONNECTIONS        1024
-#define DEFAULT_MAX_CONCURRENT_STREAMS 1024
-#define DEFAULT_MAX_MESSAGE_SIZE       (1u << 20)
-#define DEFAULT_MAX_FRAME_SIZE         (16u * 1024)
+static constexpr int DEFAULT_BACKLOG = 1024;
+static constexpr size_t DEFAULT_MAX_CONNECTIONS = 1024;
+static constexpr uint32_t DEFAULT_MAX_CONCURRENT_STREAMS = 1024;
+static constexpr uint32_t DEFAULT_MAX_MESSAGE_SIZE = 1u << 20;
+static constexpr uint32_t DEFAULT_MAX_FRAME_SIZE = 16u * 1024;
 
 /* ---- logging ------------------------------------------------------------------ */
 
@@ -29,14 +29,12 @@ static atomic_uint_fast64_t next_log_topic = 1;
 static ulog_output_id log_output = ULOG_OUTPUT_INVALID;
 static ulog_status logger_status = ULOG_STATUS_ERROR;
 
-static ulog_status logger_lock(bool lock, void *arg) {
-  (void)arg;
+static ulog_status logger_lock(bool lock, [[maybe_unused]] void *arg) {
   int rc = lock ? pthread_mutex_lock(&ulog_mutex) : pthread_mutex_unlock(&ulog_mutex);
   return rc == 0 ? ULOG_STATUS_OK : ULOG_STATUS_BUSY;
 }
 
-static void logger_output(ulog_event *event, void *arg) {
-  (void)arg;
+static void logger_output(ulog_event *event, [[maybe_unused]] void *arg) {
   int topic_id = ulog_event_get_topic(event);
   char message[1024];
   if (topic_id == ULOG_TOPIC_ID_INVALID ||

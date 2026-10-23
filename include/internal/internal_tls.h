@@ -9,7 +9,7 @@
 #include "ezgrpc2_tls.h"
 #include "internal_helpers.h"
 
-/* the backend's server context */
+/* The TLS backend's server context. */
 typedef struct ezgrpc2_tls_ctx ezgrpc2_tls_ctx;
 
 /* Per-connection TLS layer, used by the session code. These return:
@@ -53,7 +53,7 @@ struct ezgrpc2_tls_io {
 };
 
 static inline int tls_io_feed(ezgrpc2_tls_io *io, const void *data, size_t len) {
-  /* drop what the library already consumed */
+  /* Drop the bytes already consumed by the library. */
   if (io->in_seek > 0) {
     memmove(io->in.data, io->in.data + io->in_seek, io->in.len - io->in_seek);
     io->in.len -= io->in_seek;

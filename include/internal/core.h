@@ -31,7 +31,7 @@
 /* ---- logging ------------------------------------------------------------- */
 
 void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt, ...)
-    __attribute__((format(printf, 3, 4)));
+    [[gnu::format(printf, 3, 4)]];
 
 #define LOG_ERROR(server, fmt, ...) \
   server_log(server, EZGRPC2_LOG_ERROR, "error: " fmt __VA_OPT__(, ) __VA_ARGS__)
@@ -39,7 +39,7 @@ void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt
   server_log(server, EZGRPC2_LOG_WARNING, "warning: " fmt __VA_OPT__(, ) __VA_ARGS__)
 #define LOG_INFO(server, ...)  server_log(server, EZGRPC2_LOG_INFO, __VA_ARGS__)
 #define LOG_DEBUG(server, ...) server_log(server, EZGRPC2_LOG_DEBUG, __VA_ARGS__)
-/* per frame: only compiled in with T=1 */
+/* Per-frame logs are compiled in only with T=1. */
 #ifdef EZGRPC2_TRACE
 #define LOG_TRACE(server, fmt, ...) \
   server_log(server, EZGRPC2_LOG_TRACE, "@%s: " fmt, __func__ __VA_OPT__(, ) __VA_ARGS__)
@@ -51,7 +51,7 @@ void server_log(ezgrpc2_server *server, ezgrpc2_log_level level, const char *fmt
 
 /* ---- buffers --------------------------------------------------------------- */
 
-/* a growable byte buffer */
+/* A growable byte buffer. */
 typedef struct ezgrpc2_buf ezgrpc2_buf;
 struct ezgrpc2_buf {
   u8 *data;
@@ -62,13 +62,13 @@ struct ezgrpc2_buf {
 /* ---- routes ---------------------------------------------------------------- */
 
 typedef enum route_kind {
-  ROUTE_UNARY,  /* ezgrpc2_server_handle() */
+  ROUTE_UNARY,  /* ezgrpc2_server_handle(). */
   ROUTE_STREAM, /* ezgrpc2_server_handle_stream() */
   ROUTE_EVENTS, /* ezgrpc2_server_register_path() */
 } route_kind;
 
-/* a registered method. never moved or freed while the server lives, since
- * calls point to it */
+/* A registered method. It stays at a fixed address while the server lives
+ * because calls hold pointers to it. */
 typedef struct ezgrpc2_route ezgrpc2_route;
 struct ezgrpc2_route {
   char *path;
@@ -77,7 +77,7 @@ struct ezgrpc2_route {
   ezgrpc2_handler_fn handler;
   ezgrpc2_stream_handler stream;
   void *userdata;
-  /* ezgrpc2_server_unregister(): new calls get UNIMPLEMENTED */
+  /* Disabled routes reject new calls with UNIMPLEMENTED. */
   bool disabled;
 };
 
@@ -86,7 +86,7 @@ struct ezgrpc2_route {
 typedef struct ezgrpc2_stream ezgrpc2_stream;
 typedef struct ezgrpc2_session ezgrpc2_session;
 
-/* an owned list of headers to send */
+/* An owned list of response headers. */
 typedef struct nv_list nv_list;
 struct nv_list {
   nghttp2_nv *nva;
@@ -99,46 +99,46 @@ struct ezgrpc2_call {
   ezgrpc2_server *server;
   ezgrpc2_route *route;
 
-  /* the HTTP/2 stream, until it closes */
+  /* The HTTP/2 stream, until it closes. */
   ezgrpc2_session *session;
   ezgrpc2_stream *stream;
   i32 stream_id;
 
   u64 start_ms;
-  /* the client's deadline, 0 if none */
+  /* The client's deadline; 0 means there is none. */
   u64 deadline_ms;
   char peer[INET6_ADDRSTRLEN + 8];
 
-  /* a copy of the request headers, valid as long as the call */
+  /* A copy of the request headers, valid as long as the call. */
   ezgrpc2_header *req_headers;
   size_t nb_req_headers;
 
-  /* received messages not yet given to the application */
+  /* Received messages not yet delivered to the application. */
   ezgrpc2_list pending;
-  /* the request of a ROUTE_UNARY call */
+  /* The request for a ROUTE_UNARY call. */
   ezgrpc2_message *request;
 
-  /* response headers and trailers set by the application */
+  /* Response headers and trailers set by the application. */
   nv_list headers;
   nv_list trailers;
 
   ezgrpc2_status cancel_reason;
 
   bool headers_sent : 1;
-  /* grpc-encoding: gzip was announced */
+  /* The client announced grpc-encoding: gzip. */
   bool gzip : 1;
   bool finished : 1;
   bool closed : 1;
   bool cancelled : 1;
   bool cancel_delivered : 1;
-  /* the client half-closed */
+  /* The client half-closed its request stream. */
   bool half_closed : 1;
   bool end_delivered : 1;
-  /* interceptors ran and the application has seen the call */
+  /* Interceptors ran and the application has seen the call. */
   bool started : 1;
   bool rejected : 1;
   bool request_delivered : 1;
-  /* interceptors' on_done ran */
+  /* Interceptors' on_done callbacks ran. */
   bool done_reported : 1;
   bool queued : 1;
 
@@ -147,83 +147,82 @@ struct ezgrpc2_call {
   void (*cancel_fn)(ezgrpc2_call *, void *);
   void *cancel_userdata;
 
-  /* ezgrpc2_server.ready_head */
+  /* Link in ezgrpc2_server.ready_head. */
   ezgrpc2_call *ready_next;
 };
 
 /* ---- streams and sessions ----------------------------------------------------- */
 
-/* small request messages are buffered inside the stream itself */
-#define EZGRPC2_STREAM_INLINE_RECV 256
+/* Small request messages are buffered inside the stream. */
+static constexpr size_t EZGRPC2_STREAM_INLINE_RECV = 256;
 
 struct ezgrpc2_stream {
   i32 stream_id;
 
-  /* intrusive links of ezgrpc2_session.streams */
+  /* Intrusive links in ezgrpc2_session.streams. */
   ezgrpc2_stream *prev;
   ezgrpc2_stream *next;
 
   size_t nb_headers;
-  /* name and value point into the nghttp2 buffers held by `header_rcbufs` */
+  /* Names and values point into the nghttp2 buffers held by header_rcbufs. */
   ezgrpc2_header headers[CONFIG_STREAM_MAX_HEADERS];
   nghttp2_rcbuf *header_rcbufs[CONFIG_STREAM_MAX_HEADERS][2];
 
   bool is_method_post : 1;
   bool is_scheme_http : 1;
-  /* just a bool. if `te` is a trailer, or `te` does exists. */
+  /* True when the te header contains trailers. */
   bool is_te_trailers : 1;
-  /* just a bool. if content type is application/grpc* */
+  /* True when the content type starts with application/grpc. */
   bool is_content_grpc : 1;
   bool is_deadline_set : 1;
-  /* a data provider is submitted to nghttp2 and has not returned EOF yet */
+  /* A data provider was submitted and has not returned EOF. */
   bool is_data_active : 1;
-  /* the request was rejected; ignore what the client still sends */
+  /* The request was rejected; ignore any remaining client data. */
   bool is_discarding : 1;
   uint64_t deadline_ms;
 
-  /* point into `headers` */
+  /* These values point into headers. */
   const char *hcontent_type;
   const char *hgrpc_encoding;
   const char *hgrpc_accept_encoding;
   const char *hgrpc_timeout;
 
-  /* the method, set from `:path` */
+  /* The method selected by :path. */
   ezgrpc2_route *route;
-  /* the call of a routed, valid request */
+  /* The call for a routed, valid request. */
   ezgrpc2_call *call;
 
-  /* recv_data. points to `recv_inline` until it outgrows it */
+  /* recv_data points to recv_inline until the buffer needs to grow. */
   size_t recv_len;
   size_t recv_cap;
   u8 *recv_data;
   u8 recv_inline[EZGRPC2_STREAM_INLINE_RECV];
 
-  /* bytes of the front message of `lqueue_omessages` already
-   * handed to nghttp2, counting its 5 byte prefix */
+  /* Bytes from the front message already handed to nghttp2, including its
+   * five-byte prefix. */
   size_t trunc_seek;
   ezgrpc2_list lqueue_omessages;
 
-  /* trailers submitted while DATA is still queued. they are submitted once
-   * the data provider reaches EOF so that they cannot overtake the DATA */
+  /* Trailers submitted while DATA is queued. They are sent after the data
+   * provider reaches EOF so they cannot overtake the DATA. */
   nghttp2_nv *pending_trailers;
   size_t nb_pending_trailers;
 };
 
 struct ezgrpc2_session {
   nghttp2_session *ngsession;
-  /* the index in ezgrpc2_server.sessions */
+  /* Index in ezgrpc2_server.sessions. */
   size_t index;
   int sockfd;
   socklen_t socklen;
-  /* parent server context */
+  /* Parent server context. */
   ezgrpc2_server *server;
 
   struct sockaddr_storage sockaddr;
-  /* "ip:port" or "[ip]:port" */
+  /* Peer address in "ip:port" or "[ip]:port" form. */
   char peer[INET6_ADDRSTRLEN + 8];
 
-  /* the open streams. allocated when we are
-   * about to receive a HEADERS frame */
+  /* Open streams, allocated when a HEADERS frame is about to arrive. */
   ezgrpc2_stream *streams;
   size_t nb_streams;
 
@@ -235,16 +234,16 @@ struct ezgrpc2_session {
   bool is_active : 1;
   bool is_closing : 1;
 
-  /* bytes serialized by nghttp2 (and encrypted, if TLS) that are not
-   * yet accepted by the kernel */
+  /* Bytes serialized by nghttp2 (and encrypted, if TLS) but not yet accepted
+   * by the kernel. */
   ezgrpc2_buf obuf;
-  /* the buffer owned by the in-flight `write_req` */
+  /* Buffer owned by the in-flight write_req. */
   ezgrpc2_buf wbuf;
   uv_write_t write_req;
   bool is_writing : 1;
 
-  /* links of ezgrpc2_server.flush_head. these survive a session
-   * reset since a closed slot may still be queued. */
+  /* Link in ezgrpc2_server.flush_head. It survives a session reset because a
+   * closed slot may still be queued. */
   bool is_flush_queued : 1;
   ezgrpc2_session *flush_next;
 };
@@ -262,13 +261,13 @@ struct health_state;
 struct reflection_state;
 
 struct ezgrpc2_server {
-  /* the configuration, with defaults applied */
+  /* Configuration with defaults applied. */
   ezgrpc2_config config;
   char *ipv4_addr;
   char *ipv6_addr;
 
-  atomic_int log_level;
-  FILE *log_file;
+  atomic_int log_level; /* Current per-server threshold. */
+  FILE *log_file;       /* Non-owned log stream. */
   char log_topic[40];
   int log_topic_id;
   bool log_topic_initialized;
@@ -286,11 +285,11 @@ struct ezgrpc2_server {
   uv_loop_t loop;
   uv_tcp_t ipv4_listener;
   uv_tcp_t ipv6_listener;
-  /* the timeout of ezgrpc2_server_poll() */
+  /* Timeout used by ezgrpc2_server_poll(). */
   uv_timer_t timer;
-  /* fires at the earliest stream deadline */
+  /* Fires at the earliest stream deadline. */
   uv_timer_t deadline_timer;
-  /* ezgrpc2_server_post() and ezgrpc2_server_stop() */
+  /* Wakes the loop for ezgrpc2_server_post() and ezgrpc2_server_stop(). */
   uv_async_t async;
 
   bool loop_initialized : 1;
@@ -305,39 +304,39 @@ struct ezgrpc2_server {
 
   int ready_events;
 
-  /* a loop is only ever driven by one thread, so every session reads
-   * into this buffer and hands it to nghttp2 before the next read. */
+  /* One thread drives the loop. Each session reads into this buffer and
+   * passes the bytes to nghttp2 before the next read. */
   u8 *rbuf;
   size_t rbuf_len;
-  /* TLS plaintext output, batched so that it is encrypted at once */
+  /* TLS plaintext output, batched for encryption. */
   ezgrpc2_buf tls_obuf;
 
-  /* sessions with output to flush on the next poll */
+  /* Sessions with output to flush on the next poll. */
   ezgrpc2_session *flush_head;
 
-  /* the deadline the timer is armed for, UINT64_MAX if none */
+  /* Deadline for the timer; UINT64_MAX means it is disarmed. */
   u64 next_deadline_ms;
 
   size_t nb_sessions;
   ezgrpc2_session *sessions;
-  /* stack of indices into `sessions` that are free to use */
+  /* Stack of indices for free slots in sessions. */
   size_t nb_free_sessions;
   size_t *free_sessions;
 
   size_t nb_interceptors;
   ezgrpc2_interceptor *interceptors;
 
-  /* calls with something to give to the application */
+  /* Calls with data to deliver to the application. */
   ezgrpc2_call *ready_head;
   ezgrpc2_call *ready_tail;
 
-  /* the events of the last poll. they hold a reference to their call and
-   * own their message */
+  /* Events from the last poll. Each holds a reference to its call and owns
+   * its message. */
   ezgrpc2_event *events;
   size_t nb_events;
   size_t cap_events;
 
-  /* ezgrpc2_server_post() */
+  /* Queue used by ezgrpc2_server_post(). */
   pthread_mutex_t post_mutex;
   post_task *post_head;
   post_task *post_tail;
@@ -352,17 +351,17 @@ struct ezgrpc2_server {
 
 /* ezgrpc2_call.c */
 ezgrpc2_call *call_new(ezgrpc2_session *session, ezgrpc2_stream *stream);
-/* the stream is gone; cancels the call unless it was finished */
+/* Detach the stream and cancel the call unless it already finished. */
 void call_detach(ezgrpc2_call *call, ezgrpc2_status reason);
-/* ends the call with `status` on behalf of the library, and cancels it */
+/* End the call with status on behalf of the library and cancel it. */
 void call_abort(ezgrpc2_call *call, ezgrpc2_status status, const char *message);
-/* queues the call for server_dispatch() */
+/* Queue the call for server_dispatch(). */
 void call_queue(ezgrpc2_call *call);
-/* gives the queued calls to their handlers, or turns them into events */
+/* Deliver queued calls to handlers or convert them into events. */
 void server_dispatch(ezgrpc2_server *server);
-/* releases the events of the previous poll */
+/* Release events from the previous poll. */
 void server_clear_events(ezgrpc2_server *server);
-/* drops the queued calls without dispatching them */
+/* Drop queued calls without dispatching them. */
 void server_drop_ready(ezgrpc2_server *server);
 
 /* ezgrpc2_server.c */
@@ -372,7 +371,7 @@ ezgrpc2_err server_add_route(ezgrpc2_server *server, const char *path, route_kin
                              void *userdata);
 
 /* ezgrpc2_interceptor.c */
-/* runs the on_call interceptors; false if one ended the call */
+/* Run on_call interceptors; return false if one ends the call. */
 bool interceptors_run_on_call(ezgrpc2_call *call);
 void interceptors_run_on_done(ezgrpc2_call *call, ezgrpc2_status status);
 void interceptors_free(ezgrpc2_server *server);

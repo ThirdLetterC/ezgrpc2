@@ -3,8 +3,8 @@
 
 #include "ezgrpc2_defs.h"
 
-/* alignas and alignof are keywords in C23. flatcc's portable layer would
- * otherwise define them as macros, which clang warns about */
+/* C23 provides alignas and alignof keywords. Mark them as defined so flatcc's
+ * portable layer does not replace them with macros. */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L && !defined(__alignas_is_defined)
 #define __alignas_is_defined 1
 #define __alignof_is_defined 1

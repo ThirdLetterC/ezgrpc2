@@ -1,7 +1,7 @@
 #ifndef EZGRPC2_COMMON_H
 #define EZGRPC2_COMMON_H
 
-/* private to the library: never included by a public header */
+/* Private library helpers; public headers must not include this file. */
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -24,15 +24,10 @@ typedef uint64_t u64;
 #endif
 #endif
 
-#define REALIGN(alignment, size) (((size) + ((alignment) - 1)) & ~((alignment) - 1))
-
-#if __has_builtin(__builtin_expect)
-#define likely(x)   __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#else
-#define likely(x)   (x)
-#define unlikely(x) (x)
-#endif
+/* Round size up to the next multiple of a power-of-two alignment. */
+static inline size_t ezgrpc2_align_up(size_t size, size_t alignment) {
+  return (size + alignment - 1) & ~(alignment - 1);
+}
 
 #ifndef CONFIG_STREAM_MAX_HEADERS
 #define CONFIG_STREAM_MAX_HEADERS 32

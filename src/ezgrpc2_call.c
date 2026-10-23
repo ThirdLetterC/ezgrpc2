@@ -114,10 +114,6 @@ static nghttp2_nv *nva_dup(const nghttp2_nv *nva, size_t nvlen) {
   return copy;
 }
 
-#define NV(name, value)                                                                            \
-  ((nghttp2_nv){(uint8_t *)(name), (uint8_t *)(value), sizeof(name) - 1, sizeof(value) - 1,       \
-                NGHTTP2_NV_FLAG_NONE})
-
 /* ---- lifetime ------------------------------------------------------------------ */
 
 static void drop_pending(ezgrpc2_call *call) {
@@ -256,13 +252,18 @@ static char *encode_grpc_message(const char *message, size_t *len) {
 
 /* submits the response HEADERS: the fixed headers, the application's
  * metadata and `extra` (the trailers of a Trailers-Only response) */
+/* String literals keep the nghttp2 name and value lengths at compile time. */
+#define NGHTTP2_NV(name, value)                                                                    \
+  ((nghttp2_nv){(uint8_t *)(name), (uint8_t *)(value), sizeof(name) - 1, sizeof(value) - 1,       \
+                NGHTTP2_NV_FLAG_NONE})
+
 static ezgrpc2_err submit_response_headers(ezgrpc2_call *call, uint8_t flags,
                                            const nghttp2_nv *extra, size_t nb_extra) {
   nghttp2_nv base[] = {
-      NV(":status", "200"),
-      NV("content-type", "application/grpc"),
-      NV("grpc-accept-encoding", "gzip,identity"),
-      NV("grpc-encoding", "gzip"),
+      NGHTTP2_NV(":status", "200"),
+      NGHTTP2_NV("content-type", "application/grpc"),
+      NGHTTP2_NV("grpc-accept-encoding", "gzip,identity"),
+      NGHTTP2_NV("grpc-encoding", "gzip"),
   };
   size_t nb_base = call->gzip ? 4 : 3;
   size_t total = nb_base + call->headers.len + nb_extra;
@@ -284,6 +285,8 @@ static ezgrpc2_err submit_response_headers(ezgrpc2_call *call, uint8_t flags,
   nv_list_free(&call->headers);
   return EZGRPC2_OK;
 }
+
+#undef NGHTTP2_NV
 
 static ezgrpc2_err call_finish_internal(ezgrpc2_call *call, ezgrpc2_status status,
                                         const char *message) {

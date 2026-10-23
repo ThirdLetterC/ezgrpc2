@@ -3,13 +3,15 @@
 #include "ezgrpc2_message.h"
 
 /* messages start on a cache line */
-#define MESSAGE_ALIGN 64
+static constexpr size_t MESSAGE_ALIGN = 64;
+static_assert((MESSAGE_ALIGN & (MESSAGE_ALIGN - 1)) == 0, "MESSAGE_ALIGN must be a power of two");
 
 ezgrpc2_message *message_create(u8 cflag, const void *data, size_t len) {
   if (len > UINT32_MAX)
     return nullptr;
   size_t size = sizeof(ezgrpc2_message) + len;
-  ezgrpc2_message *message = ezgrpc2_aligned_alloc(MESSAGE_ALIGN, REALIGN(MESSAGE_ALIGN, size));
+  ezgrpc2_message *message = ezgrpc2_aligned_alloc(MESSAGE_ALIGN,
+                                                   ezgrpc2_align_up(size, MESSAGE_ALIGN));
   if (message == nullptr)
     return nullptr;
   message->len = (uint32_t)len;

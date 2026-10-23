@@ -1,4 +1,4 @@
-/* ezgrpc2 - a gRPC server library in C */
+/* EZgRPC2 is a gRPC server library in C. */
 #ifndef EZGRPC2_H
 #define EZGRPC2_H
 

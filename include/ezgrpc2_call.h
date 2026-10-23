@@ -30,7 +30,7 @@ typedef struct ezgrpc2_server ezgrpc2_server;
 
 /**
  * The request of a method registered with ezgrpc2_server_handle(). It stays
- * valid as long as the call. nullptr for other methods.
+ * valid as long as the call. It is nullptr for other methods.
  */
 EZGRPC2_API const ezgrpc2_message *ezgrpc2_call_request(const ezgrpc2_call *call);
 
@@ -42,7 +42,7 @@ EZGRPC2_API const char *ezgrpc2_call_peer(const ezgrpc2_call *call);
 
 /**
  * Looks up request metadata by key (case-insensitive). Returns the value,
- * NULL-terminated and valid as long as the call, or nullptr if absent.
+ * NUL-terminated and valid as long as the call, or nullptr if absent.
  * ``len`` may be nullptr.
  */
 EZGRPC2_API const char *ezgrpc2_call_metadata(const ezgrpc2_call *call, const char *key,

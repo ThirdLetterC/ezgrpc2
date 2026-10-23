@@ -3,8 +3,8 @@
 
 #include <stddef.h>
 
-/* a request header. name and value point into nghttp2 buffers held by the
- * stream, and are NULL-terminated */
+/* A request header whose name and value point into the stream's nghttp2
+ * buffers and are NUL-terminated. */
 typedef struct ezgrpc2_header ezgrpc2_header;
 struct ezgrpc2_header {
   size_t namelen;

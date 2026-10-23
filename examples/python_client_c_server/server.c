@@ -13,7 +13,7 @@
 #include "ezgrpc2.h"
 #include "helloworld.pb-c.h"
 
-#define MAX_SERVERS 256
+static constexpr size_t MAX_SERVERS = 256;
 
 static ezgrpc2_server *g_servers[MAX_SERVERS];
 static int g_nb_servers;

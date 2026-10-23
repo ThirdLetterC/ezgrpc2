@@ -6,12 +6,14 @@
 #include <stdint.h>
 
 #ifndef EZGRPC2_API
-#define EZGRPC2_API __attribute__((visibility("default")))
+#define EZGRPC2_API [[gnu::visibility("default")]]
 #endif
 
-/* the headers are written in C23; this keeps them usable from C11 and C17 */
-#if !defined(nullptr) && (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L)
+/* Provide nullptr for compilers that accept C2x but lack the C23 keyword. */
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 202311L
+#ifndef nullptr
 #define nullptr ((void *)0)
+#endif
 #endif
 
 #endif /* EZGRPC2_DEFS_H */

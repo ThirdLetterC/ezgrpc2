@@ -31,8 +31,8 @@ EZGRPC2_API char *ezgrpc2_status_details_encode(int32_t code, const char *messag
  * Decodes a 'grpc-status-details-bin' base64 string back into status code,
  * message, and the first detail entry (if present).
  *
- * ``*out_message`` and *out_detail_value are allocated with ezgrpc2_malloc
- * (caller frees with ezgrpc2_free).
+ * ``*out_message``, ``*out_type_url``, and ``*out_detail_value`` are allocated
+ * with ezgrpc2_malloc() and must be freed with ezgrpc2_free().
  */
 EZGRPC2_API ezgrpc2_err ezgrpc2_status_details_decode(const char *base64_str, int32_t *out_code,
                                               char **out_message, char **out_type_url,

@@ -3,7 +3,7 @@
 
 #include "ezgrpc2_list_message.h"
 
-/* ezgrpc2_messages is an alias for ezgrpc2_list_message_t */
+/* ezgrpc2_messages aliases ezgrpc2_list_message_t. */
 typedef ezgrpc2_list_message_t ezgrpc2_messages;
 
 static inline ezgrpc2_message *ezgrpc2_messages_pop(ezgrpc2_messages *messages) {

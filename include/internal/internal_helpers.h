@@ -9,9 +9,9 @@ int makenonblock(int sockfd);
 
 void session_close(ezgrpc2_session *session);
 
-/* queues the session to have its pending nghttp2 output written on the next poll */
+/* Queue the session's pending nghttp2 output for the next poll. */
 void session_schedule_flush(ezgrpc2_session *session);
-/* serializes pending nghttp2 frames and writes them to the socket */
+/* Serialize pending nghttp2 frames and write them to the socket. */
 void session_flush(ezgrpc2_session *session);
 void server_flush_sessions(ezgrpc2_server *server);
 void on_listener_connection(uv_stream_t *listener, int status);
@@ -26,7 +26,7 @@ void ezlog(const char *fmt, ...);
 void ezflog(FILE *fp, const char *fmt, ...);
 char *ezgetdt(char *buf, size_t len);
 
-/* ensures `extra` more bytes fit in `buf` */
+/* Ensure that `buf` has room for `extra` more bytes. */
 static inline int buf_reserve(ezgrpc2_buf *buf, size_t extra) {
   if (buf->cap - buf->len >= extra)
     return 0;
@@ -54,7 +54,7 @@ static inline void buf_free(ezgrpc2_buf *buf) {
   *buf = (ezgrpc2_buf){};
 }
 
-/* unaligned read unsigned 32 */
+/* Read an unaligned 32-bit unsigned integer. */
 static inline uint32_t uread_u32(const void *p) {
   uint32_t ret;
   memcpy(&ret, p, 4);

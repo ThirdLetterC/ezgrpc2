@@ -12,22 +12,22 @@
 #if !defined(OPENSSL_IS_AWSLC)
 #error "TLS=awslc, but the <openssl/ssl.h> found is not AWS-LC. Set TLS_PREFIX."
 #endif
-#define BACKEND_NAME "awslc"
+static constexpr char BACKEND_NAME[] = "awslc";
 #elif defined(EZGRPC2_TLS_BORINGSSL)
 #if !defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
 #error "TLS=boringssl, but the <openssl/ssl.h> found is not BoringSSL. Set TLS_PREFIX."
 #endif
-#define BACKEND_NAME "boringssl"
+static constexpr char BACKEND_NAME[] = "boringssl";
 #elif defined(EZGRPC2_TLS_LIBRESSL)
 #if !defined(LIBRESSL_VERSION_NUMBER)
 #error "TLS=libressl, but the <openssl/ssl.h> found is not LibreSSL. Set TLS_PREFIX."
 #endif
-#define BACKEND_NAME "libressl"
+static constexpr char BACKEND_NAME[] = "libressl";
 #elif defined(EZGRPC2_TLS_OPENSSL)
 #if defined(LIBRESSL_VERSION_NUMBER) || defined(OPENSSL_IS_BORINGSSL)
 #error "TLS=openssl, but the <openssl/ssl.h> found is not OpenSSL."
 #endif
-#define BACKEND_NAME "openssl"
+static constexpr char BACKEND_NAME[] = "openssl";
 #else
 #error "ezgrpc2_tls_openssl.c needs one of EZGRPC2_TLS_{OPENSSL,LIBRESSL,BORINGSSL,AWSLC}"
 #endif

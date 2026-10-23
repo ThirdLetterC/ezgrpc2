@@ -21,7 +21,7 @@ const char *tls_backend_name(void) {
   return "rustls";
 }
 
-/* rustls_version() is not NULL-terminated */
+/* rustls_version() is not NUL-terminated. */
 static char version[128];
 
 static void version_init(void) {

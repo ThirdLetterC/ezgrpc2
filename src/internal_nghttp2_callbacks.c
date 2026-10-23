@@ -12,8 +12,6 @@
 #include "internal_helpers.h"
 #include "internal_nghttp2_callbacks.h"
 
-#define atlog(...) (void)0
-
 static size_t parse_grpc_message(void *data, size_t len, ezgrpc2_messages **messages) {
   i8 *wire = data;
   *messages = nullptr;
@@ -136,6 +134,16 @@ static int on_begin_headers_callback(nghttp2_session *session, const nghttp2_fra
   return 0;
 }
 
+static bool header_matches(const u8 *value, size_t value_len, const char *expected) {
+  size_t expected_len = strlen(expected);
+  return value_len == expected_len && memcmp(value, expected, expected_len) == 0;
+}
+
+static bool header_starts_with(const u8 *value, size_t value_len, const char *prefix) {
+  size_t prefix_len = strlen(prefix);
+  return value_len >= prefix_len && memcmp(value, prefix, prefix_len) == 0;
+}
+
 static int on_header_callback2([[maybe_unused]] nghttp2_session *session,
                                const nghttp2_frame *frame, nghttp2_rcbuf *name_rcbuf,
                                nghttp2_rcbuf *value_rcbuf, [[maybe_unused]] u8 flags,
@@ -169,37 +177,25 @@ static int on_header_callback2([[maybe_unused]] nghttp2_session *session,
   const char *method = ":method";
   const char *scheme = ":scheme";
   const char *path = ":path";
-  /* clang-format off */
-#define EZSTRCMP(str1, str2) !(strlen(str1) == str2##len && !memcmp(str1, str2, str2##len))
-  if (!EZSTRCMP(method, name))
-    ezstream->is_method_post = !EZSTRCMP("POST", value);
-  else if (!EZSTRCMP(scheme, name))
-    ezstream->is_scheme_http = (!EZSTRCMP("http", value) || !EZSTRCMP("https", value));
-  else if (!EZSTRCMP(path, name)) {
+  if (header_matches(name, namelen, method))
+    ezstream->is_method_post = header_matches(value, valuelen, "POST");
+  else if (header_matches(name, namelen, scheme))
+    ezstream->is_scheme_http = header_matches(value, valuelen, "http") ||
+                               header_matches(value, valuelen, "https");
+  else if (header_matches(name, namelen, path)) {
     ezstream->route = server_find_route(ezsession->server, (const char *)value, valuelen);
-  }
-  else if (!EZSTRCMP("content-type", name)) {
-    bool is_gt = valuelen >= 16;
+  } else if (header_matches(name, namelen, "content-type")) {
     ezstream->hcontent_type = (const char *)value;
-    ezstream->is_content_grpc = is_gt ? !strncmp("application/grpc", (const char *)value, 16) : false;
-  }
-  else if (!EZSTRCMP("grpc-encoding", name)) {
+    ezstream->is_content_grpc = header_starts_with(value, valuelen, "application/grpc");
+  } else if (header_matches(name, namelen, "grpc-encoding")) {
     ezstream->hgrpc_encoding = (const char *)value;
-  }
-  else if (!EZSTRCMP("grpc-accept-encoding", name)) {
+  } else if (header_matches(name, namelen, "grpc-accept-encoding")) {
     ezstream->hgrpc_accept_encoding = (const char *)value;
-  }
-  else if (!EZSTRCMP("grpc-timeout", name)) {
+  } else if (header_matches(name, namelen, "grpc-timeout")) {
     ezstream->hgrpc_timeout = (const char *)value;
+  } else if (header_matches(name, namelen, "te")) {
+    ezstream->is_te_trailers = header_matches(value, valuelen, "trailers");
   }
-  else if (!EZSTRCMP("te", name)) {
-    ezstream->is_te_trailers = !EZSTRCMP("trailers", value);
-  }
-  else {
-    ;
-  }
-#undef EZSTRCMP
-  /* clang-format on */
 
   return 0;
 }
@@ -295,9 +291,8 @@ static inline int on_frame_recv_settings(ezgrpc2_session *ezsession, const nghtt
     return 0;
   }
   if (frame->settings.hd.flags & NGHTTP2_FLAG_ACK && frame->settings.hd.length == 0) {
-    /* OK. The client acknowledge our settings. do nothing */
+    /* Acknowledgement frames need no further action. */
   } else {
-    atlog("sent an rst\n");
     nghttp2_submit_rst_stream(ezsession->ngsession, NGHTTP2_FLAG_NONE, frame->hd.stream_id, 1);
   }
   return 0;
@@ -454,7 +449,6 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, [[maybe_unused]
 
 static int on_stream_close_callback(nghttp2_session *session, i32 stream_id,
                                     [[maybe_unused]] u32 error_code, void *user_data) {
-  atlog("stream %d closed\n", stream_id);
   ezgrpc2_session *ezsession = user_data;
   ezgrpc2_stream *ezstream = nghttp2_session_get_stream_user_data(session, stream_id);
   if (ezstream == nullptr)
