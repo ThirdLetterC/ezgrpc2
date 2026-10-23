@@ -38,6 +38,9 @@ objects += ezgrpc2_mem.o
 ifeq ($(PROTOBUF_C),1)
   objects += ezgrpc2_protobuf_c.o
 endif
+ifeq ($(FLATCC),1)
+  objects += ezgrpc2_flatcc.o
+endif
 objects += ezgrpc2_message.o
 objects += ezgrpc2_pthpool.o
 objects += ezgrpc2_reflection.o
@@ -62,7 +65,7 @@ libezgrpc2.a : $(objects)
 	$(Q)$(AR) rcs $@ $^
 
 libezgrpc2.so : $(objects)
-	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -luv $(TLS_LIBS) -o $@
+	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -luv $(TLS_LIBS) $(FLATCC_LIBS) -o $@
 
 # -MMD: rebuild objects when a header (e.g. the structs in core.h) changes
 %.o : %.c

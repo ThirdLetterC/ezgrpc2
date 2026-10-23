@@ -45,4 +45,8 @@
 #include "ezgrpc2_protobuf_c.h"
 #endif
 
+#if defined(EZGRPC2_ENABLE_FLATCC)
+#include "ezgrpc2_flatcc.h"
+#endif
+
 #endif /* EZGRPC2_H */

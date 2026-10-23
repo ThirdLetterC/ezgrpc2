@@ -19,10 +19,14 @@ all : $(targets)
 ifeq ($(PROTOBUF_C),1)
 	$(MAKE) -C python_client_c_server
 endif
+ifeq ($(FLATCC),1)
+	$(MAKE) -C flatbuffers
+endif
 
 clean :
 	rm -f $(targets) *.o
 	$(MAKE) -C python_client_c_server clean
+	$(MAKE) -C flatbuffers clean
 
 ../src/libezgrpc2.a:
 	$(MAKE) -C ../src

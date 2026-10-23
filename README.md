@@ -13,6 +13,7 @@
 - **All 4 RPC modes**: unary, server streaming, client streaming and bidirectional streaming.
 - **TLS with ALPN**: HTTP/2 over TLS 1.2 and 1.3, negotiating `h2`. Seven TLS libraries are supported: OpenSSL, LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls (see [TLS backends](#tls-backends)).
 - **Protobuf-C helpers**: optional [`protobuf-c`](https://github.com/protobuf-c/protobuf-c) integration (`EZGRPC2_PB_UNPACK`, `ezgrpc2_pb_create_response`).
+- **FlatBuffers helpers**: optional [`flatcc`](https://github.com/dvidelabs/flatcc) integration with verified, zero-copy reads (`EZGRPC2_FB_UNPACK`, `ezgrpc2_fb_create_response`).
 - **Interceptors**: pre-call hooks run with `ezgrpc2_server_intercept_pre()`, post-call hooks with `ezgrpc2_server_intercept_post()`. A built-in Bearer token interceptor is available (`ezgrpc2_interceptor_create_bearer_auth`).
 - **Health checking**: the standard `/grpc.health.v1.Health/Check` service with per-service status.
 - **Server reflection**: `grpc.reflection.v1` and `v1alpha` `ServerReflectionInfo`.
@@ -83,6 +84,7 @@ Numbers depend on hardware and on the client. A single `ghz` process with its de
   - A TLS library for TLS: OpenSSL by default, or one of the [other backends](#tls-backends)
   - `zlib` for Gzip compression
   - `protobuf-c` for the Protobuf-C helpers
+  - `flatcc` for the FlatBuffers helpers (no distribution package: build it with `scripts/build-flatcc.sh`)
   - `mimalloc` or `jemalloc` as the allocator (selected at build time)
 
 On Debian / Ubuntu:
@@ -123,7 +125,7 @@ cc -std=c23 -D_GNU_SOURCE -Iinclude my_server.c -o my_server \
   -Lsrc -l:libezgrpc2.a -luv -lnghttp2 -luuid -lpthread -lssl -lcrypto -lz
 ```
 
-Add `-lprotobuf-c` when the Protobuf-C helpers are built, and the allocator library (`-lmimalloc` or `-ljemalloc`) when one is selected.
+Add `-lprotobuf-c` when the Protobuf-C helpers are built, `-lflatccrt` when the FlatBuffers helpers are, and the allocator library (`-lmimalloc` or `-ljemalloc`) when one is selected.
 
 ### Build options
 
@@ -136,6 +138,8 @@ Add `-lprotobuf-c` when the Protobuf-C helpers are built, and the allocator libr
 | `make TLS=<backend>` | Selects the TLS library: `openssl` (default when installed), `libressl`, `boringssl`, `awslc`, `wolfssl`, `gnutls`, `rustls` or `none` |
 | `make TLS_PREFIX=<dir>` | Uses a TLS library installed in `<dir>/include` and `<dir>/lib` |
 | `make PROTOBUF_C=0` | Disables the Protobuf-C helpers (enabled when `protobuf-c` is found) |
+| `make FLATCC=0` | Disables the FlatBuffers helpers (enabled when `flatcc` is found) |
+| `make FLATCC_PREFIX=<dir>` | Uses a flatcc installed in `<dir>` (`bin/flatcc`, `include/flatcc`, `lib/libflatccrt.a`) |
 | `make D=1` | Debug build: `-ggdb3`, no optimization, debug logging |
 | `make T=1` | Trace logging of every HTTP/2 frame (slow) |
 | `make ASAN=1` | AddressSanitizer build |
@@ -287,7 +291,43 @@ ezgrpc2_messages_free(res_msgs);
 EZGRPC2_PB_FREE_UNPACKED(req);
 ```
 
-### 3. Metadata, trailers and rich errors
+### 3. FlatBuffers requests and responses
+
+With [flatcc](https://github.com/dvidelabs/flatcc), generate C code for a schema with `flatcc -a greeter.fbs`. Requests are verified and read in place, without copying or unpacking:
+
+```c
+#include "greeter_builder.h"
+#include "greeter_verifier.h"
+
+flatcc_builder_t builder;
+ezgrpc2_fb_builder_init(&builder); /* once; uses the ezgrpc2 allocator */
+
+/* verifies the buffer and returns its root table, or nullptr if it is not a
+ * valid greeter.HelloRequest. The table points into req_msg: keep it alive */
+greeter_HelloRequest_table_t req = EZGRPC2_FB_UNPACK(greeter_HelloRequest, req_msg);
+if (req == nullptr) {
+  ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
+                                     EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT, nullptr, nullptr, 0);
+  return;
+}
+
+/* fields absent from the buffer read as nullptr (strings) or their default */
+const char *name = greeter_HelloRequest_name(req);
+greeter_HelloReply_start_as_root(&builder);
+greeter_HelloReply_message_create_str(&builder, name != nullptr ? name : "World");
+greeter_HelloReply_end_as_root(&builder);
+
+/* copies the finished buffer into a message and resets the builder for reuse */
+ezgrpc2_messages *res_msgs = ezgrpc2_fb_create_response(&builder);
+ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
+ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                  EZGRPC2_GRPC_STATUS_OK);
+ezgrpc2_messages_free(res_msgs);
+```
+
+FlatBuffers services use the usual gRPC paths (`/greeter.Greeter/SayHello` for `rpc_service Greeter` in `namespace greeter`). flatcc requires `attribute "streaming";` in schemas that mark streaming methods. Message payloads (`ezgrpc2_message.data`) are aligned like `malloc()` memory, so buffers can be read where they are received.
+
+### 4. Metadata, trailers and rich errors
 
 Read a request header and end the stream with custom trailers:
 
@@ -319,7 +359,7 @@ ezgrpc2_server_session_stream_end_with_status_details(
     nullptr, 0);    /* extra trailers */
 ```
 
-### 4. Bearer token authentication
+### 5. Bearer token authentication
 
 ```c
 static bool validate_token(const char *token, void *user_data) {
@@ -343,6 +383,11 @@ if (!ezgrpc2_server_intercept_pre(server, event, "SayHello"))
 - **`server.c`**: unary, server streaming, client streaming and bidirectional streaming handlers, trailers, rich errors, a logging interceptor, health checking and reflection. Gzip-compressed requests are decompressed by the library. Set `THREADS=N` to run N event loops on the same port.
 - **`client.py`**: the official Python `grpcio` client, checking 9 scenarios over cleartext (`h2c`) and TLS.
 
+[`examples/flatbuffers/`](examples/flatbuffers/) is a Greeter whose messages are FlatBuffers:
+
+- **`server.c`**: unary and server-streaming methods built with flatcc, rejecting requests that fail verification.
+- **`client.py`**: a `grpcio` client that encodes and decodes the messages with the official Python `flatbuffers` package, checking 6 scenarios. It needs `pip install flatbuffers`.
+
 Run the tests:
 
 ```bash
@@ -352,6 +397,9 @@ make -C src/tests test
 # Python integration tests, cleartext and TLS
 make -C examples/python_client_c_server test
 make -C examples/python_client_c_server test-tls
+
+# FlatBuffers integration test (when built with FLATCC=1)
+make -C examples/flatbuffers test
 
 # everything
 make test
@@ -367,6 +415,7 @@ Every push and pull request is tested with GitHub Actions ([`.github/workflows/c
 - **Compilers**: GCC and Clang
 - **Allocators**: libc `malloc`, `mimalloc` and `jemalloc`
 - **Sanitizers**: AddressSanitizer builds (`ASAN=1`)
+- **FlatBuffers**: flatcc built from source, with GCC, Clang and AddressSanitizer
 - **TLS backends**: LibreSSL, BoringSSL, AWS-LC, wolfSSL, GnuTLS and rustls, in addition to OpenSSL
 
 ---

@@ -1,0 +1,22 @@
+// The Greeter service, with FlatBuffers instead of protobuf messages.
+// gRPC paths are /<namespace>.<service>/<method>: /greeter.Greeter/SayHello
+// flatcc wants the gRPC attribute declared
+attribute "streaming";
+
+namespace greeter;
+
+table HelloRequest {
+  name: string;
+  // how many replies SayManyHellos streams back
+  count: int = 3;
+}
+
+table HelloReply {
+  message: string;
+  index: int;
+}
+
+rpc_service Greeter {
+  SayHello(HelloRequest): HelloReply;
+  SayManyHellos(HelloRequest): HelloReply (streaming: "server");
+}

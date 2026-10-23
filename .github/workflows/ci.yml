@@ -190,3 +190,70 @@ jobs:
           make -C src/tests test $TLS_ARGS
           make -C examples/python_client_c_server test $TLS_ARGS
           make -C examples/python_client_c_server test-tls $TLS_ARGS
+
+  flatbuffers:
+    name: FlatBuffers / ${{ matrix.compiler }}${{ matrix.asan == '1' && ' / ASAN' || '' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            asan: '0'
+          - compiler: clang
+            asan: '0'
+          - compiler: gcc
+            asan: '1'
+
+    env:
+      FLATCC_PREFIX_DIR: ${{ github.workspace }}/.flatcc
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            cmake \
+            ninja-build \
+            libnghttp2-dev \
+            zlib1g-dev \
+            libssl-dev \
+            uuid-dev \
+            libprotobuf-c-dev \
+            protobuf-c-compiler \
+            protobuf-compiler \
+            libuv1-dev
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install grpcio grpcio-tools protobuf flatbuffers==25.12.19
+
+      - name: Cache the flatcc build
+        id: flatcc-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.FLATCC_PREFIX_DIR }}
+          key: flatcc-${{ runner.os }}-${{ hashFiles('scripts/build-flatcc.sh') }}
+
+      - name: Build flatcc
+        if: steps.flatcc-cache.outputs.cache-hit != 'true'
+        run: scripts/build-flatcc.sh "$FLATCC_PREFIX_DIR" "$RUNNER_TEMP/flatcc-src"
+
+      - name: Build and test
+        run: |
+          ARGS="CC=${{ matrix.compiler }} ASAN=${{ matrix.asan }} FLATCC=1 FLATCC_PREFIX=$FLATCC_PREFIX_DIR"
+          make clean
+          make $ARGS
+          make -C src/tests test $ARGS
+          make -C examples/flatbuffers test $ARGS

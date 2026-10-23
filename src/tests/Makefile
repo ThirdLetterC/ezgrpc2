@@ -14,6 +14,10 @@ ifeq ($(PROTOBUF_C),1)
   PROGS += pb
 endif
 
+ifeq ($(FLATCC),1)
+  PROGS += fb
+endif
+
 all: $(PROGS)
 
 list: ../ezgrpc2_list.o ../ezgrpc2_mem.o list.o unity/unity.o
@@ -95,6 +99,19 @@ pb.o: pb.c test_msg.pb-c.h
 pb: ../ezgrpc2_protobuf_c.o ../ezgrpc2_message.o ../ezgrpc2_mem.o ../ezgrpc2_list.o test_msg.pb-c.o pb.o unity/unity.o
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
+# flatcc writes <schema>_{reader,builder,verifier}.h and the shared flatbuffers_common_*.h
+FB_SCHEMAS = test_msg test_noid
+FB_HEADERS = $(foreach s,$(FB_SCHEMAS),$(s)_reader.h $(s)_builder.h $(s)_verifier.h)
+
+$(FB_HEADERS) &: $(addsuffix .fbs,$(FB_SCHEMAS))
+	$(FLATCC_BIN) -a $^
+
+fb.o: fb.c $(FB_HEADERS)
+	$(CC) -c $(CFLAGS) $< -o $@
+
+fb: ../ezgrpc2_flatcc.o ../ezgrpc2_message.o ../ezgrpc2_mem.o ../ezgrpc2_list.o fb.o unity/unity.o
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) $(FLATCC_LIBS) -o $@
+
 test: all
 	./list
 	./pthpool
@@ -113,6 +130,9 @@ endif
 ifeq ($(PROTOBUF_C),1)
 	./pb
 endif
+ifeq ($(FLATCC),1)
+	./fb
+endif
 
 clean:
-	rm -f *.o list pthpool mem pb roadmap metadata timeout compression health interceptor status_details reflection tls test_msg.pb-c.c test_msg.pb-c.h test_cert.pem test_key.pem
+	rm -f *.o list pthpool mem pb fb $(FB_HEADERS) flatbuffers_common_reader.h flatbuffers_common_builder.h roadmap metadata timeout compression health interceptor status_details reflection tls test_msg.pb-c.c test_msg.pb-c.h test_cert.pem test_key.pem

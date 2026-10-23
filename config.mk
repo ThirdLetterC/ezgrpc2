@@ -52,6 +52,34 @@ ifeq ($(PROTOBUF_C),1)
   LDFLAGS += -lprotobuf-c
 endif
 
+# FlatBuffers integration (flatcc):
+# Set FLATCC=1 to enable the flatcc helpers (or 0 to disable).
+# Defaults to 1 if flatcc is found, in FLATCC_PREFIX when it is set.
+# FLATCC_PREFIX=<dir> points at a flatcc installed outside the system paths
+# (<dir>/bin/flatcc, <dir>/include/flatcc, <dir>/lib/libflatccrt.a), e.g. by
+# scripts/build-flatcc.sh. FLATCC_LIBS must follow libezgrpc2.a on the link line.
+ifneq ($(FLATCC_PREFIX),)
+  FLATCC_BIN ?= $(FLATCC_PREFIX)/bin/flatcc
+  FLATCC_INCLUDE_DIRS = $(FLATCC_PREFIX)/include
+else
+  FLATCC_BIN ?= flatcc
+  FLATCC_INCLUDE_DIRS = /usr/include /usr/local/include $(HOME)/.local/include
+endif
+
+ifeq ($(origin FLATCC), undefined)
+  FLATCC := $(if $(wildcard $(addsuffix /flatcc/flatcc_builder.h,$(FLATCC_INCLUDE_DIRS))),1,0)
+endif
+
+ifeq ($(FLATCC),1)
+  CFLAGS += -DEZGRPC2_ENABLE_FLATCC
+  ifneq ($(FLATCC_PREFIX),)
+    CFLAGS += -I$(FLATCC_PREFIX)/include
+    FLATCC_LIBS = -L$(FLATCC_PREFIX)/lib -lflatccrt
+  else
+    FLATCC_LIBS = -lflatccrt
+  endif
+endif
+
 # Zlib compression support:
 ifeq ($(origin ZLIB), undefined)
   ZLIB := $(shell (pkg-config --exists zlib 2>/dev/null || test -f /usr/include/zlib.h) && echo 1 || echo 0)

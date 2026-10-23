@@ -1,0 +1,10 @@
+namespace test;
+
+table Echo {
+  text: string;
+  number: int;
+  tags: [string];
+}
+
+root_type Echo;
+file_identifier "ECHO";

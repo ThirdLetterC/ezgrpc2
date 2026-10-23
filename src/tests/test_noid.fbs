@@ -1,0 +1,8 @@
+// a schema without file_identifier
+namespace test;
+
+table Ping {
+  value: long;
+}
+
+root_type Ping;
