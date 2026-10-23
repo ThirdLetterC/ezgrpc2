@@ -12,11 +12,11 @@
 #include "internal_nghttp2_callbacks.h"
 #include "ulog/ulog.h"
 
-static constexpr int DEFAULT_BACKLOG = 1024;
-static constexpr size_t DEFAULT_MAX_CONNECTIONS = 1024;
-static constexpr uint32_t DEFAULT_MAX_CONCURRENT_STREAMS = 1024;
-static constexpr uint32_t DEFAULT_MAX_MESSAGE_SIZE = 1u << 20;
-static constexpr uint32_t DEFAULT_MAX_FRAME_SIZE = 16u * 1024;
+static const int DEFAULT_BACKLOG = 1024;
+static const size_t DEFAULT_MAX_CONNECTIONS = 1024;
+static const uint32_t DEFAULT_MAX_CONCURRENT_STREAMS = 1024;
+static const uint32_t DEFAULT_MAX_MESSAGE_SIZE = 1u << 20;
+static const uint32_t DEFAULT_MAX_FRAME_SIZE = 16u * 1024;
 
 /* ---- logging ------------------------------------------------------------------ */
 

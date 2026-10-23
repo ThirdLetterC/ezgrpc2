@@ -4,18 +4,18 @@
 
 #if defined(EZGRPC2_USE_MIMALLOC)
 #include <mimalloc.h>
-static constexpr char default_allocator_name[] = "mimalloc";
+static const char default_allocator_name[] = "mimalloc";
 static const ezgrpc2_allocator default_allocator = {mi_malloc, mi_calloc, mi_realloc, mi_free,
                                                     mi_aligned_alloc};
 static ezgrpc2_allocator current = {mi_malloc, mi_calloc, mi_realloc, mi_free,
                                     mi_aligned_alloc};
 #elif defined(EZGRPC2_USE_JEMALLOC)
 /* jemalloc replaces the libc functions when linked */
-static constexpr char default_allocator_name[] = "jemalloc";
+static const char default_allocator_name[] = "jemalloc";
 static const ezgrpc2_allocator default_allocator = {malloc, calloc, realloc, free, aligned_alloc};
 static ezgrpc2_allocator current = {malloc, calloc, realloc, free, aligned_alloc};
 #else
-static constexpr char default_allocator_name[] = "libc";
+static const char default_allocator_name[] = "libc";
 static const ezgrpc2_allocator default_allocator = {malloc, calloc, realloc, free, aligned_alloc};
 static ezgrpc2_allocator current = {malloc, calloc, realloc, free, aligned_alloc};
 #endif

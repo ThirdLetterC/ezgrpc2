@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include "core.h"
 
-static constexpr size_t MAX_SYMBOL_LEN = 128;
+enum { MAX_SYMBOL_LEN = 128 };
 
 typedef struct descriptor_entry {
   char symbol[MAX_SYMBOL_LEN];

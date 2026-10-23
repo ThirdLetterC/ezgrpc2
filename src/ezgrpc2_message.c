@@ -3,7 +3,7 @@
 #include "ezgrpc2_message.h"
 
 /* messages start on a cache line */
-static constexpr size_t MESSAGE_ALIGN = 64;
+enum { MESSAGE_ALIGN = 64 };
 static_assert((MESSAGE_ALIGN & (MESSAGE_ALIGN - 1)) == 0, "MESSAGE_ALIGN must be a power of two");
 
 ezgrpc2_message *message_create(u8 cflag, const void *data, size_t len) {

@@ -154,7 +154,7 @@ struct ezgrpc2_call {
 /* ---- streams and sessions ----------------------------------------------------- */
 
 /* Small request messages are buffered inside the stream. */
-static constexpr size_t EZGRPC2_STREAM_INLINE_RECV = 256;
+enum { EZGRPC2_STREAM_INLINE_RECV = 256 };
 
 struct ezgrpc2_stream {
   i32 stream_id;

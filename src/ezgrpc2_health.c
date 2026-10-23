@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include "core.h"
 
-static constexpr size_t MAX_SERVICE_NAME_LEN = 128;
+enum { MAX_SERVICE_NAME_LEN = 128 };
 
 typedef struct service_health_entry {
   char *name;

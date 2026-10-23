@@ -124,7 +124,7 @@ void ezflog(FILE *fp, const char *fmt, ...) {
 }
 
 /* stop pulling frames out of nghttp2 once this many bytes wait for the kernel */
-static constexpr size_t EZGRPC2_OBUF_HIGH_WATER = 256 * 1024;
+static const size_t EZGRPC2_OBUF_HIGH_WATER = 256 * 1024;
 
 static void on_session_close(uv_handle_t *handle) {
   ezgrpc2_session *session = handle->data;

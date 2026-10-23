@@ -11,7 +11,7 @@
 #include "greeter_builder.h"
 #include "greeter_verifier.h"
 
-static constexpr int MAX_REPLIES = 100;
+enum { MAX_REPLIES = 100 };
 
 static ezgrpc2_server *g_server;
 static int g_quiet = 0;
