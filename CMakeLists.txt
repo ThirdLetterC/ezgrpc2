@@ -101,6 +101,7 @@ if(NOT GRPC_HAS_C23_CONSTEXPR)
 endif()
 add_library(ulog STATIC "${ULOG_SOURCE}")
 add_library(ulog::ulog ALIAS ulog)
+set_target_properties(ulog PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ulog PRIVATE "${ulog_SOURCE_DIR}/include")
 target_compile_options(ulog PRIVATE -Wall -pedantic -fvisibility=hidden "${GRPC_C_STANDARD_FLAG}")
 target_compile_definitions(ulog PRIVATE
