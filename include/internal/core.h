@@ -108,8 +108,9 @@ struct grpc_call {
   u64 deadline_ms;
   char peer[INET6_ADDRSTRLEN + 8];
 
-  /* A copy of the request headers, valid as long as the call. */
-  grpc_header *req_headers;
+  /* Header views and nghttp2 refs retained for the call lifetime. */
+  grpc_header req_headers[CONFIG_STREAM_MAX_HEADERS];
+  nghttp2_rcbuf *req_header_rcbufs[CONFIG_STREAM_MAX_HEADERS][2];
   size_t nb_req_headers;
 
   /* Received messages not yet delivered to the application. */
@@ -193,6 +194,7 @@ struct grpc_stream {
   grpc_call *call;
 
   /* recv_data points to recv_inline until the buffer needs to grow. */
+  size_t recv_start;
   size_t recv_len;
   size_t recv_cap;
   u8 *recv_data;

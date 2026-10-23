@@ -60,6 +60,111 @@ static int zlib_codec(bool compress, bool gzip, int level, const uint8_t *in, si
 #endif
 }
 
+/* Compress directly into caller-owned storage, used by grpc_message_compress
+ * to avoid a temporary codec buffer followed by a payload copy. */
+static int compress_into(grpc_compression_algorithm algorithm, int level, const uint8_t *in,
+                         size_t in_len, uint8_t *out, size_t out_cap, size_t *out_len) {
+  if (algorithm == GRPC_COMPRESS_GZIP || algorithm == GRPC_COMPRESS_DEFLATE) {
+#if defined(GRPC_ENABLE_ZLIB)
+    if (in_len > UINT_MAX || out_cap > UINT_MAX)
+      return 1;
+    if (level == GRPC_COMPRESSION_LEVEL_DEFAULT)
+      level = Z_DEFAULT_COMPRESSION;
+    if (level < Z_DEFAULT_COMPRESSION || level > Z_BEST_COMPRESSION)
+      return 1;
+    z_stream stream = {0};
+    int window = algorithm == GRPC_COMPRESS_GZIP ? 15 + 16 : 15;
+    if (deflateInit2(&stream, level, Z_DEFLATED, window, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+      return 2;
+    stream.next_in = (Bytef *)in;
+    stream.avail_in = (uInt)in_len;
+    stream.next_out = out;
+    stream.avail_out = (uInt)out_cap;
+    int status = deflate(&stream, Z_FINISH);
+    if (status == Z_STREAM_END)
+      *out_len = (size_t)stream.total_out;
+    deflateEnd(&stream);
+    return status == Z_STREAM_END ? 0 : 4;
+#else
+    (void)level; (void)in; (void)in_len; (void)out; (void)out_cap; (void)out_len;
+    return -1;
+#endif
+  }
+  if (algorithm == GRPC_COMPRESS_ZSTD) {
+#if defined(GRPC_ENABLE_ZSTD)
+    if (level == GRPC_COMPRESSION_LEVEL_DEFAULT)
+      level = ZSTD_CLEVEL_DEFAULT;
+    if (level < ZSTD_minCLevel() || level > ZSTD_maxCLevel())
+      return 1;
+    size_t n = ZSTD_compress(out, out_cap, in, in_len, level);
+    if (ZSTD_isError(n))
+      return 4;
+    *out_len = n;
+    return 0;
+#else
+    (void)level; (void)in; (void)in_len; (void)out; (void)out_cap; (void)out_len;
+    return -1;
+#endif
+  }
+  if (algorithm == GRPC_COMPRESS_SNAPPY) {
+#if defined(GRPC_ENABLE_SNAPPY)
+    if (level != GRPC_COMPRESSION_LEVEL_DEFAULT)
+      return 1;
+    size_t n = out_cap;
+    if (snappy_compress((const char *)in, in_len, (char *)out, &n) != SNAPPY_OK)
+      return 4;
+    *out_len = n;
+    return 0;
+#else
+    (void)level; (void)in; (void)in_len; (void)out; (void)out_cap; (void)out_len;
+    return -1;
+#endif
+  }
+  return -1;
+}
+
+static size_t compression_bound(grpc_compression_algorithm algorithm, int level, size_t len) {
+  switch (algorithm) {
+  case GRPC_COMPRESS_GZIP:
+  case GRPC_COMPRESS_DEFLATE:
+#if defined(GRPC_ENABLE_ZLIB)
+    if (len > UINT_MAX || level < Z_DEFAULT_COMPRESSION || level > Z_BEST_COMPRESSION)
+      return 0;
+    {
+      z_stream stream = {0};
+      int window = algorithm == GRPC_COMPRESS_GZIP ? 15 + 16 : 15;
+      if (level == GRPC_COMPRESSION_LEVEL_DEFAULT)
+        level = Z_DEFAULT_COMPRESSION;
+      if (deflateInit2(&stream, level, Z_DEFLATED, window, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+        return 0;
+      uLong bound = deflateBound(&stream, (uLong)len);
+      deflateEnd(&stream);
+      return bound <= UINT_MAX ? (size_t)bound : 0;
+    }
+#else
+    return 0;
+#endif
+  case GRPC_COMPRESS_ZSTD:
+#if defined(GRPC_ENABLE_ZSTD)
+    if (level == GRPC_COMPRESSION_LEVEL_DEFAULT)
+      level = ZSTD_CLEVEL_DEFAULT;
+    if (level < ZSTD_minCLevel() || level > ZSTD_maxCLevel())
+      return 0;
+    return ZSTD_compressBound(len);
+#else
+    return 0;
+#endif
+  case GRPC_COMPRESS_SNAPPY:
+#if defined(GRPC_ENABLE_SNAPPY)
+    return level == GRPC_COMPRESSION_LEVEL_DEFAULT ? snappy_max_compressed_length(len) : 0;
+#else
+    return 0;
+#endif
+  default:
+    return 0;
+  }
+}
+
 GRPC_API int grpc_compress(grpc_compression_algorithm algorithm, int level,
                                  const uint8_t *in, size_t in_len, uint8_t **out,
                                  size_t *out_len) {
@@ -171,11 +276,21 @@ GRPC_API int grpc_decompress_gzip(const uint8_t *in, size_t len, uint8_t **out, 
 GRPC_API grpc_message *grpc_message_compress(const grpc_message *msg,
                                                        grpc_compression_algorithm algorithm, int level) {
   if (!msg) return nullptr;
-  uint8_t *data = nullptr; size_t len = 0;
-  if (grpc_compress(algorithm, level, msg->data, msg->len, &data, &len) != 0) return nullptr;
-  grpc_message *result = message_create(1, data, len);
-  grpc_free(data);
-  if (result) { result->compression = algorithm; result->compression_level = level; }
+  size_t bound = compression_bound(algorithm, level, msg->len);
+  if (bound == 0 || bound > UINT32_MAX)
+    return nullptr;
+  grpc_message *result = grpc_message_alloc(bound);
+  if (result == nullptr)
+    return nullptr;
+  size_t len = 0;
+  if (compress_into(algorithm, level, msg->data, msg->len, result->data, bound, &len) != 0) {
+    grpc_message_free(result);
+    return nullptr;
+  }
+  result->len = (uint32_t)len;
+  result->cflag = 1;
+  result->compression = algorithm;
+  result->compression_level = level;
   return result;
 }
 GRPC_API grpc_message *grpc_message_decompress(const grpc_message *msg,

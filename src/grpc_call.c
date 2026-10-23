@@ -127,45 +127,32 @@ static void call_free(grpc_call *call) {
   grpc_message_free(call->request);
   nv_list_free(&call->headers);
   nv_list_free(&call->trailers);
-  grpc_free(call->req_headers);
+  for (size_t i = 0; i < call->nb_req_headers; i++) {
+    nghttp2_rcbuf_decref(call->req_header_rcbufs[i][0]);
+    nghttp2_rcbuf_decref(call->req_header_rcbufs[i][1]);
+  }
   if (call->userdata_free != nullptr)
     call->userdata_free(call->userdata);
   grpc_free(call);
 }
 
-/* copies the request headers, which nghttp2 frees with the stream */
-static bool copy_request_headers(grpc_call *call, const grpc_stream *stream) {
-  size_t size = stream->nb_headers * sizeof(grpc_header);
-  for (size_t i = 0; i < stream->nb_headers; i++)
-    size += stream->headers[i].namelen + stream->headers[i].valuelen + 2;
-  grpc_header *headers = grpc_malloc(size ? size : 1);
-  if (headers == nullptr)
-    return false;
-  char *p = (char *)(headers + stream->nb_headers);
+/* Retain nghttp2's header storage instead of copying every name and value. */
+static void retain_request_headers(grpc_call *call, const grpc_stream *stream) {
   for (size_t i = 0; i < stream->nb_headers; i++) {
-    const grpc_header *h = &stream->headers[i];
-    memcpy(p, h->name, h->namelen + 1);
-    headers[i].name = p;
-    headers[i].namelen = h->namelen;
-    p += h->namelen + 1;
-    memcpy(p, h->value, h->valuelen + 1);
-    headers[i].value = p;
-    headers[i].valuelen = h->valuelen;
-    p += h->valuelen + 1;
+    call->req_headers[i] = stream->headers[i];
+    call->req_header_rcbufs[i][0] = stream->header_rcbufs[i][0];
+    call->req_header_rcbufs[i][1] = stream->header_rcbufs[i][1];
+    nghttp2_rcbuf_incref(call->req_header_rcbufs[i][0]);
+    nghttp2_rcbuf_incref(call->req_header_rcbufs[i][1]);
   }
-  call->req_headers = headers;
   call->nb_req_headers = stream->nb_headers;
-  return true;
 }
 
 grpc_call *call_new(grpc_session *session, grpc_stream *stream) {
   grpc_call *call = grpc_calloc(1, sizeof(*call));
   if (call == nullptr)
     return nullptr;
-  if (!copy_request_headers(call, stream)) {
-    grpc_free(call);
-    return nullptr;
-  }
+  retain_request_headers(call, stream);
   /* the stream's reference, dropped by call_detach() */
   atomic_init(&call->refs, 1);
   call->server = session->server;

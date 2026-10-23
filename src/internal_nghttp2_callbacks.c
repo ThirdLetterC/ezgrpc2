@@ -313,12 +313,14 @@ static inline int on_frame_recv_data(grpc_session *ezsession, const nghttp2_fram
   grpc_call *call = ezstream->call;
 
   grpc_messages *messages;
-  size_t lseek = parse_grpc_message(ezstream->recv_data, ezstream->recv_len,
+  size_t lseek = parse_grpc_message(ezstream->recv_data + ezstream->recv_start, ezstream->recv_len,
                                     ezstream->grpc_encoding, &messages);
   if (lseek) {
     assert(lseek <= ezstream->recv_len);
-    memmove(ezstream->recv_data, ezstream->recv_data + lseek, ezstream->recv_len - lseek);
+    ezstream->recv_start += lseek;
     ezstream->recv_len -= lseek;
+    if (ezstream->recv_len == 0)
+      ezstream->recv_start = 0;
   }
   if (messages != nullptr) {
     grpc_list_concat_and_empty_src(&call->pending, (grpc_list *)messages);
@@ -434,20 +436,29 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, [[maybe_unused]
     return 0;
   }
 
-  if (ezstream->recv_len + len > ezstream->recv_cap) {
-    size_t cap = ezstream->recv_cap * 2;
-    while (cap < ezstream->recv_len + len)
+  if (ezstream->recv_start + ezstream->recv_len + len > ezstream->recv_cap) {
+    if (ezstream->recv_start > 0) {
+      memmove(ezstream->recv_data, ezstream->recv_data + ezstream->recv_start,
+              ezstream->recv_len);
+      ezstream->recv_start = 0;
+    }
+  }
+  if (ezstream->recv_start + ezstream->recv_len + len > ezstream->recv_cap) {
+    size_t needed = ezstream->recv_len + len;
+    size_t cap = ezstream->recv_cap;
+    while (cap < needed)
       cap *= 2;
     u8 *recv_data = grpc_malloc(cap);
     if (recv_data == nullptr)
       return NGHTTP2_ERR_CALLBACK_FAILURE;
-    memcpy(recv_data, ezstream->recv_data, ezstream->recv_len);
+    memcpy(recv_data, ezstream->recv_data + ezstream->recv_start, ezstream->recv_len);
     if (ezstream->recv_data != ezstream->recv_inline)
       grpc_free(ezstream->recv_data);
     ezstream->recv_data = recv_data;
     ezstream->recv_cap = cap;
+    ezstream->recv_start = 0;
   }
-  memcpy(ezstream->recv_data + ezstream->recv_len, data, len);
+  memcpy(ezstream->recv_data + ezstream->recv_start + ezstream->recv_len, data, len);
   ezstream->recv_len += len;
   LOG_TRACE(ezsession->server, "data chunk recv %zu bytes at stream %d\n", len, stream_id);
 
