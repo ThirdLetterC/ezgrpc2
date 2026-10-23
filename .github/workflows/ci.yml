@@ -41,6 +41,8 @@ jobs:
             pkg-config \
             libnghttp2-dev \
             zlib1g-dev \
+            libzstd-dev \
+            libsnappy-dev \
             libssl-dev \
             uuid-dev \
             libprotobuf-c-dev \
@@ -97,6 +99,8 @@ jobs:
             pkg-config \
             libnghttp2-dev \
             zlib1g-dev \
+            libzstd-dev \
+            libsnappy-dev \
             libssl-dev \
             uuid-dev \
             libprotobuf-c-dev \
