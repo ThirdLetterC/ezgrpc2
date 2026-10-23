@@ -64,6 +64,8 @@ endif()
 set(CMAKE_REQUIRED_FLAGS "${GRPC_C_STANDARD_FLAG}")
 check_c_source_compiles("int main(void) { void *p = nullptr; (void)p; return 0; }" GRPC_HAS_NULLPTR)
 check_c_source_compiles("typedef struct { int x; } sample; int main(void) { return (int)alignof(sample); }" GRPC_HAS_ALIGNOF)
+check_c_source_compiles("static constexpr int value = 1; int main(void) { return value - 1; }"
+                        GRPC_HAS_C23_CONSTEXPR)
 unset(CMAKE_REQUIRED_FLAGS)
 
 function(grpc_feature_enabled feature found description)
@@ -269,6 +271,10 @@ if(NGHTTP2_HEADER_DIR)
   target_include_directories(grpc_objects PRIVATE "${NGHTTP2_HEADER_DIR}")
 endif()
 target_compile_options(grpc_objects PRIVATE -Wall -pedantic -fvisibility=hidden "${GRPC_C_STANDARD_FLAG}")
+if(NOT GRPC_HAS_C23_CONSTEXPR)
+  # Clang 18 accepts -std=c23 but does not yet implement C23 constexpr.
+  target_compile_definitions(grpc_objects PRIVATE constexpr=const)
+endif()
 target_compile_definitions(grpc_objects PUBLIC _GNU_SOURCE _FORTIFY_SOURCE=2
   ULOG_BUILD_EXTRA_OUTPUTS=1 ULOG_BUILD_TOPICS_MODE=2 ULOG_BUILD_COLOR=0
   ULOG_BUILD_SOURCE_LOCATION=0 ULOG_BUILD_TIME=0 ULOG_BUILD_WARN_NOT_ENABLED=0)

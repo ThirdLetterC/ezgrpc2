@@ -29,8 +29,8 @@
 
 /* ---- logging ------------------------------------------------------------- */
 
-void server_log(grpc_server *server, grpc_log_level level, const char *fmt, ...)
-    [[gnu::format(printf, 3, 4)]];
+[[gnu::format(printf, 3, 4)]] void server_log(grpc_server *server, grpc_log_level level,
+                                              const char *fmt, ...);
 
 #define LOG_ERROR(server, fmt, ...) \
   server_log(server, GRPC_LOG_ERROR, "error: " fmt __VA_OPT__(, ) __VA_ARGS__)
