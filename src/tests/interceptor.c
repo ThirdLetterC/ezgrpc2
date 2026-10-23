@@ -11,31 +11,28 @@ void tearDown(void) {}
 static int s_pre_calls = 0;
 static int s_post_calls = 0;
 
-static ezgrpc2_grpc_status dummy_pre_pass(
-  [[maybe_unused]] ezgrpc2_server *server,
-  [[maybe_unused]] const ezgrpc2_interceptor_info *info,
-  [[maybe_unused]] const char **custom_error_msg,
-  [[maybe_unused]] void *interceptor_data) {
+static ezgrpc2_grpc_status dummy_pre_pass([[maybe_unused]] ezgrpc2_server *server,
+                                          [[maybe_unused]] const ezgrpc2_interceptor_info *info,
+                                          [[maybe_unused]] const char **custom_error_msg,
+                                          [[maybe_unused]] void *interceptor_data) {
   s_pre_calls++;
   return EZGRPC2_GRPC_STATUS_OK;
 }
 
-static ezgrpc2_grpc_status dummy_pre_reject(
-  [[maybe_unused]] ezgrpc2_server *server,
-  [[maybe_unused]] const ezgrpc2_interceptor_info *info,
-  const char **custom_error_msg,
-  [[maybe_unused]] void *interceptor_data) {
+static ezgrpc2_grpc_status dummy_pre_reject([[maybe_unused]] ezgrpc2_server *server,
+                                            [[maybe_unused]] const ezgrpc2_interceptor_info *info,
+                                            const char **custom_error_msg,
+                                            [[maybe_unused]] void *interceptor_data) {
   s_pre_calls++;
   *custom_error_msg = "Access Denied by Interceptor";
   return EZGRPC2_GRPC_STATUS_PERMISSION_DENIED;
 }
 
-static void dummy_post(
-  [[maybe_unused]] ezgrpc2_server *server,
-  [[maybe_unused]] const ezgrpc2_interceptor_info *info,
-  [[maybe_unused]] ezgrpc2_grpc_status status,
-  [[maybe_unused]] uint64_t duration_ms,
-  [[maybe_unused]] void *interceptor_data) {
+static void dummy_post([[maybe_unused]] ezgrpc2_server *server,
+                       [[maybe_unused]] const ezgrpc2_interceptor_info *info,
+                       [[maybe_unused]] ezgrpc2_grpc_status status,
+                       [[maybe_unused]] uint64_t duration_ms,
+                       [[maybe_unused]] void *interceptor_data) {
   s_post_calls++;
 }
 
@@ -48,10 +45,10 @@ void test_interceptor_registration_and_hooks(void) {
   TEST_ASSERT_NOT_NULL(server);
 
   ezgrpc2_interceptor pass_inc = {
-    .name = "pass_inc",
-    .pre_fn = dummy_pre_pass,
-    .post_fn = dummy_post,
-    .user_data = nullptr,
+      .name = "pass_inc",
+      .pre_fn = dummy_pre_pass,
+      .post_fn = dummy_post,
+      .user_data = nullptr,
   };
   TEST_ASSERT_EQUAL_INT(0, ezgrpc2_server_add_interceptor(server, &pass_inc));
 
@@ -68,15 +65,16 @@ void test_interceptor_registration_and_hooks(void) {
   TEST_ASSERT_TRUE(ok);
   TEST_ASSERT_EQUAL_INT(1, s_pre_calls);
 
-  ezgrpc2_server_intercept_post(server, &dummy_event, "/test.Service/Method", EZGRPC2_GRPC_STATUS_OK, 10);
+  ezgrpc2_server_intercept_post(server, &dummy_event, "/test.Service/Method",
+                                EZGRPC2_GRPC_STATUS_OK, 10);
   TEST_ASSERT_EQUAL_INT(1, s_post_calls);
 
   // Add reject interceptor
   ezgrpc2_interceptor rej_inc = {
-    .name = "rej_inc",
-    .pre_fn = dummy_pre_reject,
-    .post_fn = nullptr,
-    .user_data = nullptr,
+      .name = "rej_inc",
+      .pre_fn = dummy_pre_reject,
+      .post_fn = nullptr,
+      .user_data = nullptr,
   };
   TEST_ASSERT_EQUAL_INT(0, ezgrpc2_server_add_interceptor(server, &rej_inc));
 
@@ -89,7 +87,8 @@ void test_interceptor_registration_and_hooks(void) {
 }
 
 void test_bearer_auth_interceptor_creation(void) {
-  ezgrpc2_interceptor auth_inc = ezgrpc2_interceptor_create_bearer_auth(my_token_validator, nullptr);
+  ezgrpc2_interceptor auth_inc =
+      ezgrpc2_interceptor_create_bearer_auth(my_token_validator, nullptr);
   TEST_ASSERT_NOT_NULL(auth_inc.pre_fn);
   TEST_ASSERT_EQUAL_STRING("bearer_auth", auth_inc.name);
   ezgrpc2_free(auth_inc.user_data);

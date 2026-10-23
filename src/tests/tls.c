@@ -29,11 +29,8 @@ void test_tls_init_and_enable(void) {
 }
 
 void test_server_new_tls(void) {
-  ezgrpc2_server *server = ezgrpc2_server_new_tls(
-    "0.0.0.0", 19995, nullptr, 0, 16,
-    "test_cert.pem", "test_key.pem",
-    nullptr, nullptr
-  );
+  ezgrpc2_server *server = ezgrpc2_server_new_tls("0.0.0.0", 19995, nullptr, 0, 16, "test_cert.pem",
+                                                  "test_key.pem", nullptr, nullptr);
   TEST_ASSERT_NOT_NULL(server);
 
   ezgrpc2_server_free(server);

@@ -8,7 +8,7 @@
 #include "ezgrpc2_messages.h"
 #include "ezgrpc2_grpc_status.h"
 
-#define MAX_HEALTH_SERVICES 32
+#define MAX_HEALTH_SERVICES  32
 #define MAX_SERVICE_NAME_LEN 128
 
 typedef struct {
@@ -72,10 +72,11 @@ EZGRPC2_API int ezgrpc2_health_register(ezgrpc2_server *server) {
     return 1;
   }
   return ezgrpc2_server_register_path(server, EZGRPC2_HEALTH_PATH_CHECK,
-                                     (void *)&s_health_userdata_marker, 0, 0);
+                                      (void *)&s_health_userdata_marker, 0, 0);
 }
 
-static void parse_health_request_service(const uint8_t *data, size_t len, char *out_service, size_t max_len) {
+static void parse_health_request_service(const uint8_t *data, size_t len, char *out_service,
+                                         size_t max_len) {
   out_service[0] = '\0';
   if (len == 0 || data == nullptr) {
     return;
@@ -95,7 +96,8 @@ static void parse_health_request_service(const uint8_t *data, size_t len, char *
       while (idx < len) {
         uint8_t b = data[idx++];
         str_len |= (size_t)(b & 0x7F) << shift;
-        if (!(b & 0x80)) break;
+        if (!(b & 0x80))
+          break;
         shift += 7;
       }
       if (idx + str_len <= len) {
@@ -106,7 +108,8 @@ static void parse_health_request_service(const uint8_t *data, size_t len, char *
       return;
     } else if (wire_type == 0) {
       // varint
-      while (idx < len && (data[idx++] & 0x80)) {}
+      while (idx < len && (data[idx++] & 0x80)) {
+      }
     } else if (wire_type == 2) {
       // skip length-delimited
       size_t skip_len = 0;
@@ -114,7 +117,8 @@ static void parse_health_request_service(const uint8_t *data, size_t len, char *
       while (idx < len) {
         uint8_t b = data[idx++];
         skip_len |= (size_t)(b & 0x7F) << shift;
-        if (!(b & 0x80)) break;
+        if (!(b & 0x80))
+          break;
         shift += 7;
       }
       idx += skip_len;
@@ -152,7 +156,8 @@ EZGRPC2_API bool ezgrpc2_health_handle_event(ezgrpc2_server *server, ezgrpc2_eve
   ezgrpc2_messages_push(msgs, out_msg);
 
   ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, msgs);
-  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                    EZGRPC2_GRPC_STATUS_OK);
   ezgrpc2_messages_free(msgs);
 
   return true;

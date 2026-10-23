@@ -4,11 +4,11 @@
 #include <stdint.h>
 #include "common.h"
 
-#define EZGRPC2_HEADER_CONTENT_TYPE_NULL 0
-#define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC 1
+#define EZGRPC2_HEADER_CONTENT_TYPE_NULL                      0
+#define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC          1
 #define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC_PROTOBUF 2
-#define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC_JSON 2
-#define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC_CUSTOM -1
+#define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC_JSON     2
+#define EZGRPC2_HEADER_CONTENT_TYPE_APPLICATION_GRPC_CUSTOM   -1
 
 /* content encoding */
 enum ezgrpc2_content_encoding {
@@ -29,7 +29,7 @@ enum ezgrpc2_content_type {
 };
 typedef enum ezgrpc2_content_type ezgrpc2_content_type;
 
-#define EZGRPC2_HEADER_GRPC_TIMEOUT_NULL 0
+#define EZGRPC2_HEADER_GRPC_TIMEOUT_NULL   0
 #define EZGRPC2_HEADER_GRPC_TIMEOUT_CUSTOM -1
 
 typedef struct ezgrpc2_grpc_request_headers_t ezgrpc2_grpc_request_headers_t;

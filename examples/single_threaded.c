@@ -21,8 +21,8 @@ ezgrpc2_messages *callback_path0([[maybe_unused]] ezgrpc2_messages *messages) {
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 2; i++, pp++) {
     ezgrpc2_message *msg = ezgrpc2_message_new(0, (void *)"    path0!", 11);
-    *(uint32_t*)(msg->data) = pp;
-    
+    *(uint32_t *)(msg->data) = pp;
+
     ezgrpc2_messages_push(messages_ret, msg);
   }
 
@@ -33,49 +33,49 @@ ezgrpc2_messages *callback_path1([[maybe_unused]] ezgrpc2_messages *messages) {
   ezgrpc2_messages *messages_ret = ezgrpc2_messages_new(nullptr);
   for (int i = 0; i < 2; i++, pp++) {
     ezgrpc2_message *msg = ezgrpc2_message_new(0, (void *)"    path1!", 11);
-    *(uint32_t*)(msg->data) = pp;
+    *(uint32_t *)(msg->data) = pp;
     ezgrpc2_messages_push(messages_ret, msg);
   }
 
   return messages_ret;
 }
 
-static void handle_event_message(ezgrpc2_event *event,
-                                 ezgrpc2_server *server) {
+static void handle_event_message(ezgrpc2_event *event, ezgrpc2_server *server) {
   size_t nb_msg = ezgrpc2_messages_count(event->message.messages);
   struct path_userdata_t *path_userdata = event->userdata;
   if (path_userdata->is_unary) {
     if (!event->message.end_stream || nb_msg != 1) {
       /* This is unary service, but they are sending more than one message */
-      ezgrpc2_server_session_stream_end(server, event->session_uuid,
-                                 event->message.stream_id,
-                                 EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
+      ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                        EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
       return;
     }
   }
   ezgrpc2_messages *messages = path_userdata->callback(event->message.messages);
-  switch (ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, messages)) {
-    case 0:
-      if (event->message.end_stream)
-        ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
-      break;
-    case 1:
-      break;
-    case 2:
-      printf(">stream id doesn't exist %d\n", event->message.stream_id);
-      break;
-    case 3:
-      printf("fatal\n");
-      break;
-    default:
-      assert(0);
+  switch (ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id,
+                                             messages)) {
+  case 0:
+    if (event->message.end_stream)
+      ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                        EZGRPC2_GRPC_STATUS_OK);
+    break;
+  case 1:
+    break;
+  case 2:
+    printf(">stream id doesn't exist %d\n", event->message.stream_id);
+    break;
+  case 3:
+    printf("fatal\n");
+    break;
+  default:
+    assert(0);
   }
   ezgrpc2_messages_free(messages);
 }
 
-static void handle_event_dataloss(ezgrpc2_event *event,
-                                  ezgrpc2_server *server) {
-  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->dataloss.stream_id, EZGRPC2_GRPC_STATUS_DATA_LOSS);
+static void handle_event_dataloss(ezgrpc2_event *event, ezgrpc2_server *server) {
+  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->dataloss.stream_id,
+                                    EZGRPC2_GRPC_STATUS_DATA_LOSS);
 }
 
 static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events) {
@@ -130,8 +130,10 @@ int main(void) {
   path_userdata[1].callback = callback_path1;
 
   /* services */
-  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service1", path_userdata, 0, 0);
-  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service2", path_userdata + 1, 0, 0);
+  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service1", path_userdata, 0,
+                                     0);
+  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service2", path_userdata + 1,
+                                     0, 0);
 
   ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
   while (1) {

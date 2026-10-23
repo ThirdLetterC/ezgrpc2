@@ -10,27 +10,26 @@ static void pb_free([[maybe_unused]] void *allocator_data, void *pointer) {
 }
 
 static ProtobufCAllocator g_ezgrpc2_pb_allocator = {
-  .alloc = pb_alloc,
-  .free = pb_free,
-  .allocator_data = nullptr,
+    .alloc = pb_alloc,
+    .free = pb_free,
+    .allocator_data = nullptr,
 };
 
 EZGRPC2_API ProtobufCAllocator *ezgrpc2_pb_get_allocator(void) {
   return &g_ezgrpc2_pb_allocator;
 }
 
-EZGRPC2_API ProtobufCMessage *ezgrpc2_pb_unpack(
-    const ProtobufCMessageDescriptor *descriptor,
-    const ezgrpc2_message *message) {
+EZGRPC2_API ProtobufCMessage *ezgrpc2_pb_unpack(const ProtobufCMessageDescriptor *descriptor,
+                                                const ezgrpc2_message *message) {
   if (descriptor == nullptr || message == nullptr) {
     return nullptr;
   }
-  return protobuf_c_message_unpack(descriptor, &g_ezgrpc2_pb_allocator, message->len, message->data);
+  return protobuf_c_message_unpack(descriptor, &g_ezgrpc2_pb_allocator, message->len,
+                                   message->data);
 }
 
-EZGRPC2_API ezgrpc2_message *ezgrpc2_pb_pack(
-    const ProtobufCMessage *message,
-    uint8_t compressed_flag) {
+EZGRPC2_API ezgrpc2_message *ezgrpc2_pb_pack(const ProtobufCMessage *message,
+                                             uint8_t compressed_flag) {
   if (message == nullptr) {
     return nullptr;
   }
@@ -57,8 +56,7 @@ EZGRPC2_API void ezgrpc2_pb_free_unpacked(ProtobufCMessage *message) {
   }
 }
 
-EZGRPC2_API ezgrpc2_messages *ezgrpc2_pb_create_response(
-    const ProtobufCMessage *message) {
+EZGRPC2_API ezgrpc2_messages *ezgrpc2_pb_create_response(const ProtobufCMessage *message) {
   if (message == nullptr) {
     return nullptr;
   }

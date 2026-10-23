@@ -15,24 +15,18 @@
 #include "ezgrpc2_events_struct.h"
 #include "ezgrpc2_tls.h"
 
-#ifdef _WIN32
-int makenonblock(SOCKET sockfd) {
-  return ioctlsocket(sockfd, FIONBIO, &(u_long){1});
-}
-#else
 int makenonblock(int sockfd) {
   int res = fcntl(sockfd, F_GETFL, 0);
-  if (res == -1) return 1;
+  if (res == -1)
+    return 1;
   res = (res | O_NONBLOCK);
   return fcntl(sockfd, F_SETFL, res);
 }
-#endif
 
 int list_cmp_ezheader_name(const void *data, const void *userdata) {
   const ezgrpc2_header *a = data;
   const ezgrpc2_header *b = userdata;
-  return a->namelen == b->namelen ?
-      strncasecmp(a->name, b->name, a->namelen) : 1;
+  return a->namelen == b->namelen ? strncasecmp(a->name, b->name, a->namelen) : 1;
 }
 
 static void dump_decode_binary(const i8 *data, size_t len) {
@@ -42,7 +36,8 @@ static void dump_decode_binary(const i8 *data, size_t len) {
     putchar(look_up[(data[i] >> 4) & 0x0f]);
     putchar(look_up[data[i] & 0x0f]);
     putchar(' ');
-    if (i == 7) putchar(' ');
+    if (i == 7)
+      putchar(' ');
   }
 }
 
@@ -59,7 +54,8 @@ static void dump_decode_ascii(const i8 *data, size_t len) {
 
 void ezdump(void *vdata, size_t len) {
   const i8 *data = vdata;
-  if (len == 0) return;
+  if (len == 0)
+    return;
 
   size_t cur = 0;
 
@@ -76,7 +72,8 @@ void ezdump(void *vdata, size_t len) {
     /* write the empty */
     for (size_t i = 0; i < 16 - (len % 16); i++) {
       printf("   ");
-      if (i == 7 && (7 < 16 - (len % 16))) putchar(' ');
+      if (i == 7 && (7 < 16 - (len % 16)))
+        putchar(' ');
     }
     printf("| ");
     dump_decode_ascii(data + cur, len % 16);
@@ -100,9 +97,8 @@ char *ezgetdt(char *buf, size_t len) {
 #else
   time_t t = time(nullptr);
   struct tm stm = *localtime(&t);
-  snprintf(buf, len, COLSTR("%d/%02d/%02d %02d:%02d:%02d", BGRN),
-           stm.tm_year + 1900, stm.tm_mon + 1, stm.tm_mday, stm.tm_hour,
-           stm.tm_min, stm.tm_sec);
+  snprintf(buf, len, COLSTR("%d/%02d/%02d %02d:%02d:%02d", BGRN), stm.tm_year + 1900,
+           stm.tm_mon + 1, stm.tm_mday, stm.tm_hour, stm.tm_min, stm.tm_sec);
 #endif
   return buf;
 }
@@ -135,7 +131,7 @@ static void on_session_close(uv_handle_t *handle) {
 
   buf_free(&session->obuf);
   buf_free(&session->wbuf);
-  session->sockfd = EZINVALID_SOCKET;
+  session->sockfd = -1;
   session->nb_streams = 0;
   session->tls_handshake_done = false;
   session->is_writing = false;
@@ -195,7 +191,8 @@ void session_close(ezgrpc2_session *session) {
   uv_close((uv_handle_t *)&session->tcp, on_session_close);
 }
 
-ezgrpc2_session *session_find(ezgrpc2_session *sessions, size_t nb_sessions, ezgrpc2_session_uuid session_uuid) {
+ezgrpc2_session *session_find(ezgrpc2_session *sessions, size_t nb_sessions,
+                              ezgrpc2_session_uuid session_uuid) {
   if (session_uuid.index >= nb_sessions)
     return nullptr;
   ezgrpc2_session *s = &sessions[session_uuid.index];
@@ -236,7 +233,8 @@ static int session_create(ezgrpc2_session *ezsession) {
       .calloc = nghttp2_mem_calloc,
       .realloc = nghttp2_mem_realloc,
   };
-  int res = nghttp2_session_server_new3(&ezsession->ngsession, server->ngcallbacks, ezsession, nullptr, &mem);
+  int res = nghttp2_session_server_new3(&ezsession->ngsession, server->ngcallbacks, ezsession,
+                                        nullptr, &mem);
   if (res < 0) {
     ezsession->ngsession = nullptr;
     return 1;
@@ -246,7 +244,8 @@ static int session_create(ezgrpc2_session *ezsession) {
   nghttp2_settings_entry siv[] = {
       {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, (uint32_t)server->http2_settings.initial_window_size},
       {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, (uint32_t)server->http2_settings.max_frame_size},
-      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, (uint32_t)server->http2_settings.max_concurrent_streams},
+      {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS,
+       (uint32_t)server->http2_settings.max_concurrent_streams},
   };
   res = nghttp2_submit_settings(ezsession->ngsession, NGHTTP2_FLAG_NONE, siv, 3);
   if (res < 0) {
@@ -254,12 +253,7 @@ static int session_create(ezgrpc2_session *ezsession) {
   }
 
   size_t ndx = ezsession->session_uuid.index;
-#ifdef _WIN32
-  RPC_STATUS wres = UuidCreate(&ezsession->session_uuid.uuid);
-  assert(wres == RPC_S_OK);
-#else
   uuid_generate_random(ezsession->session_uuid.uuid);
-#endif
   ezsession->session_uuid.index = ndx;
 
   return 0;
@@ -272,24 +266,25 @@ static void session_set_peer(ezgrpc2_session *ezsession) {
   }
   ezsession->socklen = namelen;
   switch (ezsession->sockaddr.ss_family) {
-    case AF_INET: {
-      struct sockaddr_in *sa = (struct sockaddr_in *)&ezsession->sockaddr;
-      inet_ntop(AF_INET, &sa->sin_addr.s_addr,
-                ezsession->client_addr, sizeof(ezsession->client_addr) - 1);
-      ezsession->client_port = ntohs(sa->sin_port);
-    } break;
-    case AF_INET6: {
-      struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)&ezsession->sockaddr;
-      inet_ntop(AF_INET6, sa6->sin6_addr.s6_addr,
-                ezsession->client_addr, sizeof(ezsession->client_addr) - 1);
-      ezsession->client_port = ntohs(sa6->sin6_port);
-    } break;
-    default:
-      break;
+  case AF_INET: {
+    struct sockaddr_in *sa = (struct sockaddr_in *)&ezsession->sockaddr;
+    inet_ntop(AF_INET, &sa->sin_addr.s_addr, ezsession->client_addr,
+              sizeof(ezsession->client_addr) - 1);
+    ezsession->client_port = ntohs(sa->sin_port);
+  } break;
+  case AF_INET6: {
+    struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)&ezsession->sockaddr;
+    inet_ntop(AF_INET6, sa6->sin6_addr.s6_addr, ezsession->client_addr,
+              sizeof(ezsession->client_addr) - 1);
+    ezsession->client_port = ntohs(sa6->sin6_port);
+  } break;
+  default:
+    break;
   }
 }
 
-static void on_session_alloc(uv_handle_t *handle, [[maybe_unused]] size_t suggested_size, uv_buf_t *buf) {
+static void on_session_alloc(uv_handle_t *handle, [[maybe_unused]] size_t suggested_size,
+                             uv_buf_t *buf) {
   ezgrpc2_server *server = ((ezgrpc2_session *)handle->data)->server;
   *buf = uv_buf_init((char *)server->rbuf, (unsigned int)server->rbuf_len);
 }
@@ -298,7 +293,7 @@ static int session_recv(ezgrpc2_session *ezsession, const u8 *data, size_t len) 
   ssize_t res = nghttp2_session_mem_recv(ezsession->ngsession, data, len);
   if (res < 0) {
     EZGRPC2_LOG_ERROR(ezsession->server, "@ %s: nghttp2: %s. killing...\n", __func__,
-          nghttp2_strerror((int)res));
+                      nghttp2_strerror((int)res));
     return 1;
   }
   return 0;
@@ -387,7 +382,8 @@ void on_listener_connection(uv_stream_t *listener, int status) {
     return;
   }
 
-  EZGRPC2_LOG_NORMAL(server, "incoming %s connection\n", listener == (uv_stream_t *)&server->ipv4_listener ? "ipv4" : "ipv6");
+  EZGRPC2_LOG_NORMAL(server, "incoming %s connection\n",
+                     listener == (uv_stream_t *)&server->ipv4_listener ? "ipv4" : "ipv6");
 
   if (server->nb_free_sessions == 0) {
     EZGRPC2_LOG_ERROR(server, "@ %s: max client reached", __func__);
@@ -417,12 +413,8 @@ void on_listener_connection(uv_stream_t *listener, int status) {
 
   uv_os_fd_t fd;
   if (uv_fileno((uv_handle_t *)&session->tcp, &fd) == 0) {
-    session->sockfd = (EZSOCKET)fd;
-#ifdef _WIN32
-    (void)setsockopt(session->sockfd, SOL_SOCKET, SO_KEEPALIVE, (char *)&(BOOL){1}, sizeof(BOOL));
-#else
+    session->sockfd = fd;
     (void)setsockopt(session->sockfd, SOL_SOCKET, SO_KEEPALIVE, (void *)&(int){1}, sizeof(int));
-#endif
   }
   (void)uv_tcp_nodelay(&session->tcp, 1);
   session_set_peer(session);
@@ -477,8 +469,7 @@ static int session_serialize(ezgrpc2_session *ezsession) {
     const u8 *data;
     ssize_t n = nghttp2_session_mem_send(ezsession->ngsession, &data);
     if (n < 0) {
-      EZGRPC2_LOG_ERROR(ezsession->server, "nghttp2: %s. killing...\n",
-            nghttp2_strerror((int)n));
+      EZGRPC2_LOG_ERROR(ezsession->server, "nghttp2: %s. killing...\n", nghttp2_strerror((int)n));
       return 1;
     }
     if (n == 0)
@@ -547,9 +538,11 @@ void session_flush(ezgrpc2_session *ezsession) {
     ezsession->wbuf = ezsession->obuf;
     ezsession->obuf = tmp;
     ezsession->obuf.len = 0;
-    buf = uv_buf_init((char *)ezsession->wbuf.data + n, (unsigned int)(ezsession->wbuf.len - (size_t)n));
+    buf = uv_buf_init((char *)ezsession->wbuf.data + n,
+                      (unsigned int)(ezsession->wbuf.len - (size_t)n));
     ezsession->write_req.data = ezsession;
-    if (uv_write(&ezsession->write_req, (uv_stream_t *)&ezsession->tcp, &buf, 1, on_session_write) != 0) {
+    if (uv_write(&ezsession->write_req, (uv_stream_t *)&ezsession->tcp, &buf, 1,
+                 on_session_write) != 0) {
       session_close(ezsession);
       return;
     }
@@ -575,7 +568,8 @@ ezgrpc2_stream *stream_new(i32 stream_id) {
 }
 
 void stream_free(ezgrpc2_stream *ezstream) {
-  if (ezstream == nullptr) return;
+  if (ezstream == nullptr)
+    return;
   if (ezstream->recv_data != ezstream->recv_inline)
     free(ezstream->recv_data);
   free(ezstream->pending_trailers);

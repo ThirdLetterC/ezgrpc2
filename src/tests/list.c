@@ -4,10 +4,8 @@
 #include "ezgrpc2_list.h"
 #include "unity.h"
 
-void setUp(void) {
-}
-void tearDown(void) {
-}
+void setUp(void) {}
+void tearDown(void) {}
 
 void test_list_creation(void) {
   ezgrpc2_list *list = ezgrpc2_list_new(nullptr);
@@ -116,8 +114,8 @@ void test_list_random(void) {
   ezgrpc2_list_free(list);
 }
 
-void foreach(const void *data, [[maybe_unused]] const void *userdata) {
-  puts((const char*)data);
+void foreach (const void *data, [[maybe_unused]] const void *userdata) {
+  puts((const char *)data);
 }
 
 int main(void) {

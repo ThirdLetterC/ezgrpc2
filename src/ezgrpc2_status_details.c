@@ -19,7 +19,8 @@ static size_t write_varint(uint8_t *buf, uint64_t val) {
   do {
     uint8_t b = (uint8_t)(val & 0x7F);
     val >>= 7;
-    if (val != 0) b |= 0x80;
+    if (val != 0)
+      b |= 0x80;
     buf[len++] = b;
   } while (val != 0);
   return len;
@@ -31,18 +32,16 @@ static uint64_t read_varint(const uint8_t *buf, size_t len, size_t *seek) {
   while (*seek < len) {
     uint8_t b = buf[(*seek)++];
     val |= (uint64_t)(b & 0x7F) << shift;
-    if (!(b & 0x80)) break;
+    if (!(b & 0x80))
+      break;
     shift += 7;
   }
   return val;
 }
 
-EZGRPC2_API char *ezgrpc2_status_details_encode(
-  int32_t code,
-  const char *message,
-  const ezgrpc2_status_detail_entry *details,
-  size_t nb_details,
-  size_t *out_len) {
+EZGRPC2_API char *ezgrpc2_status_details_encode(int32_t code, const char *message,
+                                                const ezgrpc2_status_detail_entry *details,
+                                                size_t nb_details, size_t *out_len) {
   size_t msg_len = message ? strlen(message) : 0;
 
   // Calculate total protobuf byte size
@@ -129,13 +128,9 @@ EZGRPC2_API char *ezgrpc2_status_details_encode(
   return b64;
 }
 
-EZGRPC2_API int ezgrpc2_status_details_decode(
-  const char *base64_str,
-  int32_t *out_code,
-  char **out_message,
-  char **out_type_url,
-  uint8_t **out_detail_value,
-  size_t *out_detail_len) {
+EZGRPC2_API int ezgrpc2_status_details_decode(const char *base64_str, int32_t *out_code,
+                                              char **out_message, char **out_type_url,
+                                              uint8_t **out_detail_value, size_t *out_detail_len) {
   if (base64_str == nullptr) {
     return 1;
   }
@@ -146,11 +141,16 @@ EZGRPC2_API int ezgrpc2_status_details_decode(
     return 2;
   }
 
-  if (out_code) *out_code = 0;
-  if (out_message) *out_message = nullptr;
-  if (out_type_url) *out_type_url = nullptr;
-  if (out_detail_value) *out_detail_value = nullptr;
-  if (out_detail_len) *out_detail_len = 0;
+  if (out_code)
+    *out_code = 0;
+  if (out_message)
+    *out_message = nullptr;
+  if (out_type_url)
+    *out_type_url = nullptr;
+  if (out_detail_value)
+    *out_detail_value = nullptr;
+  if (out_detail_len)
+    *out_detail_len = 0;
 
   size_t seek = 0;
   while (seek < raw_len) {
@@ -161,7 +161,8 @@ EZGRPC2_API int ezgrpc2_status_details_decode(
     if (field_num == 1 && wire_type == 0) {
       // code
       uint64_t c = read_varint(raw, raw_len, &seek);
-      if (out_code) *out_code = (int32_t)c;
+      if (out_code)
+        *out_code = (int32_t)c;
     } else if (field_num == 2 && wire_type == 2) {
       // message
       size_t mlen = (size_t)read_varint(raw, raw_len, &seek);
@@ -201,7 +202,8 @@ EZGRPC2_API int ezgrpc2_status_details_decode(
             if (v) {
               memcpy(v, raw + seek, vlen);
               *out_detail_value = v;
-              if (out_detail_len) *out_detail_len = vlen;
+              if (out_detail_len)
+                *out_detail_len = vlen;
             }
           }
           seek += vlen;
@@ -225,18 +227,12 @@ EZGRPC2_API int ezgrpc2_status_details_decode(
 }
 
 EZGRPC2_API int ezgrpc2_server_session_stream_end_with_status_details(
-  ezgrpc2_server *server,
-  ezgrpc2_session_uuid session_uuid,
-  int32_t stream_id,
-  ezgrpc2_grpc_status status,
-  const char *message,
-  const ezgrpc2_status_detail_entry *details,
-  size_t nb_details,
-  const ezgrpc2_metadata_entry *extra_trailers,
-  size_t nb_extra_trailers) {
+    ezgrpc2_server *server, ezgrpc2_session_uuid session_uuid, int32_t stream_id,
+    ezgrpc2_grpc_status status, const char *message, const ezgrpc2_status_detail_entry *details,
+    size_t nb_details, const ezgrpc2_metadata_entry *extra_trailers, size_t nb_extra_trailers) {
   size_t b64_len = 0;
-  char *b64_status = ezgrpc2_status_details_encode(
-    (int32_t)status, message, details, nb_details, &b64_len);
+  char *b64_status =
+      ezgrpc2_status_details_encode((int32_t)status, message, details, nb_details, &b64_len);
 
   size_t total_trailers = nb_extra_trailers + (b64_status ? 1 : 0);
   ezgrpc2_metadata_entry *all_trailers = nullptr;
@@ -248,18 +244,17 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end_with_status_details(
       }
       if (b64_status != nullptr) {
         all_trailers[nb_extra_trailers] = (ezgrpc2_metadata_entry){
-          .key = EZGRPC2_STATUS_DETAILS_TRAILER,
-          .key_len = strlen(EZGRPC2_STATUS_DETAILS_TRAILER),
-          .value = b64_status,
-          .value_len = b64_len,
+            .key = EZGRPC2_STATUS_DETAILS_TRAILER,
+            .key_len = strlen(EZGRPC2_STATUS_DETAILS_TRAILER),
+            .value = b64_status,
+            .value_len = b64_len,
         };
       }
     }
   }
 
-  int res = ezgrpc2_server_session_stream_end2(
-    server, session_uuid, stream_id, status, message,
-    all_trailers, total_trailers);
+  int res = ezgrpc2_server_session_stream_end2(server, session_uuid, stream_id, status, message,
+                                               all_trailers, total_trailers);
 
   if (all_trailers != nullptr) {
     ezgrpc2_free(all_trailers);

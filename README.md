@@ -301,12 +301,3 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
-
-On Windows, `wepoll` is licensed under the 2-Clause BSD License:
-```
-wepoll - epoll for Windows
-https://github.com/piscisaureus/wepoll
-
-Copyright 2012-2020, Bert Belder <bertbelder@gmail.com>
-All rights reserved.
-```

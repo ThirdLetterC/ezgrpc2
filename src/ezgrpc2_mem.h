@@ -24,7 +24,7 @@ EZGRPC2_API const ezgrpc2_allocator *ezgrpc2_get_allocator(void);
 EZGRPC2_API const char *ezgrpc2_get_allocator_name(void);
 
 #if defined(EZGRPC2_USE_MIMALLOC)
-#  include <mimalloc.h>
+#include <mimalloc.h>
 
 static inline void *ezgrpc2_malloc(size_t size) {
   return mi_malloc(size);
@@ -49,7 +49,7 @@ static inline char *ezgrpc2_strndup(const char *s, size_t n) {
 }
 
 #elif defined(EZGRPC2_USE_JEMALLOC)
-#  include <jemalloc/jemalloc.h>
+#include <jemalloc/jemalloc.h>
 
 static inline void *ezgrpc2_malloc(size_t size) {
   return malloc(size);
@@ -67,7 +67,8 @@ static inline void *ezgrpc2_aligned_alloc(size_t alignment, size_t size) {
   return aligned_alloc(alignment, size);
 }
 static inline char *ezgrpc2_strdup(const char *s) {
-  if (s == nullptr) return nullptr;
+  if (s == nullptr)
+    return nullptr;
   size_t len = strlen(s);
   char *r = (char *)malloc(len + 1);
   if (r != nullptr) {
@@ -76,9 +77,11 @@ static inline char *ezgrpc2_strdup(const char *s) {
   return r;
 }
 static inline char *ezgrpc2_strndup(const char *s, size_t n) {
-  if (s == nullptr) return nullptr;
+  if (s == nullptr)
+    return nullptr;
   size_t l = 0;
-  while (l < n && s[l] != '\0') l++;
+  while (l < n && s[l] != '\0')
+    l++;
   char *r = (char *)malloc(l + 1);
   if (r != nullptr) {
     memcpy(r, s, l);
@@ -107,7 +110,8 @@ static inline void *ezgrpc2_aligned_alloc(size_t alignment, size_t size) {
   return g_ezgrpc2_current_allocator.aligned_alloc(alignment, size);
 }
 static inline char *ezgrpc2_strdup(const char *s) {
-  if (s == nullptr) return nullptr;
+  if (s == nullptr)
+    return nullptr;
   size_t len = strlen(s);
   return g_ezgrpc2_current_allocator.strndup(s, len);
 }
@@ -130,14 +134,11 @@ static inline void ezgrpc2_free(void *ptr) {
   free(ptr);
 }
 static inline void *ezgrpc2_aligned_alloc(size_t alignment, size_t size) {
-#if defined(_WIN32)
-  return _aligned_malloc(size, alignment);
-#else
   return aligned_alloc(alignment, size);
-#endif
 }
 static inline char *ezgrpc2_strdup(const char *s) {
-  if (s == nullptr) return nullptr;
+  if (s == nullptr)
+    return nullptr;
   size_t len = strlen(s);
   char *r = (char *)malloc(len + 1);
   if (r != nullptr) {
@@ -146,9 +147,11 @@ static inline char *ezgrpc2_strdup(const char *s) {
   return r;
 }
 static inline char *ezgrpc2_strndup(const char *s, size_t n) {
-  if (s == nullptr) return nullptr;
+  if (s == nullptr)
+    return nullptr;
   size_t l = 0;
-  while (l < n && s[l] != '\0') l++;
+  while (l < n && s[l] != '\0')
+    l++;
   char *r = (char *)malloc(l + 1);
   if (r != nullptr) {
     memcpy(r, s, l);
@@ -160,13 +163,13 @@ static inline char *ezgrpc2_strndup(const char *s, size_t n) {
 #endif
 
 #ifndef EZGRPC2_NO_ALLOC_OVERRIDE
-#  define malloc(sz)            ezgrpc2_malloc(sz)
-#  define calloc(n, sz)         ezgrpc2_calloc(n, sz)
-#  define realloc(ptr, sz)      ezgrpc2_realloc(ptr, sz)
-#  define free(ptr)             ezgrpc2_free(ptr)
-#  define aligned_alloc(al, sz) ezgrpc2_aligned_alloc(al, sz)
-#  define strdup(s)             ezgrpc2_strdup(s)
-#  define strndup(s, n)         ezgrpc2_strndup(s, n)
+#define malloc(sz)            ezgrpc2_malloc(sz)
+#define calloc(n, sz)         ezgrpc2_calloc(n, sz)
+#define realloc(ptr, sz)      ezgrpc2_realloc(ptr, sz)
+#define free(ptr)             ezgrpc2_free(ptr)
+#define aligned_alloc(al, sz) ezgrpc2_aligned_alloc(al, sz)
+#define strdup(s)             ezgrpc2_strdup(s)
+#define strndup(s, n)         ezgrpc2_strndup(s, n)
 #endif
 
 #ifdef __cplusplus

@@ -21,19 +21,17 @@
 #include "ezgrpc2_header.h"
 #include "ezgrpc2_grpc_status.h"
 
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//int ezgrpc2_session_submit_response(ezgrpc2_session *ezsession, i32 stream_id, ezgrpc2_list *lmessages, int end_stream, int grpc_status);
+// int ezgrpc2_session_submit_response(ezgrpc2_session *ezsession, i32 stream_id, ezgrpc2_list *lmessages, int end_stream, int grpc_status);
 
 /**
  * The :c:func:`ezgrpc2_session_send()` sends the  messages in the list,
  * ``lmessages`` to the associated session_uuid and stream_id.
 
- * On success, the :c:func:`ezgrpc2_session_send()` takes ownership of lmessages 
+ * On success, the :c:func:`ezgrpc2_session_send()` takes ownership of lmessages
  *
  * A sucessful return value may mean:
  *
@@ -51,11 +49,8 @@ extern "C" {
  *    * If the stream_id doesn't exists, 2.
  *
  */
-int ezgrpc2_server_session_stream_send(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_messages *messages);
+int ezgrpc2_server_session_stream_send(ezgrpc2_server *ezserver, ezgrpc2_session_uuid session_uuid,
+                                       i32 stream_id, ezgrpc2_messages *messages);
 
 /**
  * The :c:func:`ezgrpc2_session_end_stream()` ends the stream associated with the session_uuid and stream_id.
@@ -67,11 +62,8 @@ int ezgrpc2_server_session_stream_send(
  *
  *    * If the stream_id doesn't exists, 2.
  */
-int ezgrpc2_server_session_stream_end(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_grpc_status status);
+int ezgrpc2_server_session_stream_end(ezgrpc2_server *ezserver, ezgrpc2_session_uuid session_uuid,
+                                      i32 stream_id, ezgrpc2_grpc_status status);
 
 /**
  * The :c:func:`ezgrpc2_server_session_end()` ends the session
@@ -82,11 +74,8 @@ int ezgrpc2_server_session_stream_end(
  *
  *    * If the session doesn't exists, 1.
  */
-int ezgrpc2_server_session_end(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_id,
-  i32 last_stream_id,
-  int status);
+int ezgrpc2_server_session_end(ezgrpc2_server *ezserver, ezgrpc2_session_uuid session_id,
+                               i32 last_stream_id, int status);
 
 #if 0
 /* list of ezgrpc2_header */
@@ -125,11 +114,9 @@ ezgrpc2_list ezgrpc2_session_get_headers(
  * .. note::
  *    Strings are compared ignoring case
  * */
-int ezgrpc2_server_session_stream_find_header(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_header *ezheader);
+int ezgrpc2_server_session_stream_find_header(ezgrpc2_server *ezserver,
+                                              ezgrpc2_session_uuid session_uuid, i32 stream_id,
+                                              ezgrpc2_header *ezheader);
 
 const char *ezgrpc2_license(void);
 

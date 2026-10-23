@@ -27,24 +27,19 @@ typedef struct ezgrpc2_interceptor_info {
  * or an error status to reject the call immediately.
  * If rejected, custom_error_msg may be set to point to an error string.
  */
-typedef ezgrpc2_grpc_status (*ezgrpc2_interceptor_pre_fn)(
-  ezgrpc2_server *server,
-  const ezgrpc2_interceptor_info *info,
-  const char **custom_error_msg,
-  void *interceptor_data
-);
+typedef ezgrpc2_grpc_status (*ezgrpc2_interceptor_pre_fn)(ezgrpc2_server *server,
+                                                          const ezgrpc2_interceptor_info *info,
+                                                          const char **custom_error_msg,
+                                                          void *interceptor_data);
 
 /**
  * Post-call hook:
  * Called after response messages are prepared (or stream ended).
  */
-typedef void (*ezgrpc2_interceptor_post_fn)(
-  ezgrpc2_server *server,
-  const ezgrpc2_interceptor_info *info,
-  ezgrpc2_grpc_status status,
-  uint64_t duration_ms,
-  void *interceptor_data
-);
+typedef void (*ezgrpc2_interceptor_post_fn)(ezgrpc2_server *server,
+                                            const ezgrpc2_interceptor_info *info,
+                                            ezgrpc2_grpc_status status, uint64_t duration_ms,
+                                            void *interceptor_data);
 
 typedef struct ezgrpc2_interceptor {
   const char *name;
@@ -58,10 +53,8 @@ typedef struct ezgrpc2_interceptor {
  * Multiple interceptors can be registered and are executed in registration order.
  * Returns 0 on success, non-zero on error.
  */
-EZGRPC2_API int ezgrpc2_server_add_interceptor(
-  ezgrpc2_server *server,
-  const ezgrpc2_interceptor *interceptor
-);
+EZGRPC2_API int ezgrpc2_server_add_interceptor(ezgrpc2_server *server,
+                                               const ezgrpc2_interceptor *interceptor);
 
 /**
  * Executes registered pre-call interceptors for an incoming event.
@@ -71,30 +64,21 @@ EZGRPC2_API int ezgrpc2_server_add_interceptor(
  * If all interceptors return OK:
  *   - Returns true (proceed to method handler).
  */
-EZGRPC2_API bool ezgrpc2_server_intercept_pre(
-  ezgrpc2_server *server,
-  ezgrpc2_event *event,
-  const char *path
-);
+EZGRPC2_API bool ezgrpc2_server_intercept_pre(ezgrpc2_server *server, ezgrpc2_event *event,
+                                              const char *path);
 
 /**
  * Executes registered post-call interceptors.
  */
-EZGRPC2_API void ezgrpc2_server_intercept_post(
-  ezgrpc2_server *server,
-  ezgrpc2_event *event,
-  const char *path,
-  ezgrpc2_grpc_status status,
-  uint64_t duration_ms
-);
+EZGRPC2_API void ezgrpc2_server_intercept_post(ezgrpc2_server *server, ezgrpc2_event *event,
+                                               const char *path, ezgrpc2_grpc_status status,
+                                               uint64_t duration_ms);
 
 /* Built-in Auth Interceptor Helper: Bearer Token Validator */
 typedef bool (*ezgrpc2_token_validator_fn)(const char *token, void *user_data);
 
-EZGRPC2_API ezgrpc2_interceptor ezgrpc2_interceptor_create_bearer_auth(
-  ezgrpc2_token_validator_fn validator,
-  void *user_data
-);
+EZGRPC2_API ezgrpc2_interceptor
+ezgrpc2_interceptor_create_bearer_auth(ezgrpc2_token_validator_fn validator, void *user_data);
 
 #ifdef __cplusplus
 }

@@ -45,24 +45,27 @@ EZGRPC2_API int64_t ezgrpc2_timeout_parse_ms(const char *timeout_str) {
   uint64_t ms = 0;
   switch (unit) {
   case 'H': // Hour
-    if (val > (ULLONG_MAX / (3600ULL * 1000ULL))) return -1;
+    if (val > (ULLONG_MAX / (3600ULL * 1000ULL)))
+      return -1;
     ms = val * 3600ULL * 1000ULL;
     break;
   case 'M': // Minute
-    if (val > (ULLONG_MAX / (60ULL * 1000ULL))) return -1;
+    if (val > (ULLONG_MAX / (60ULL * 1000ULL)))
+      return -1;
     ms = val * 60ULL * 1000ULL;
     break;
   case 'S': // Second
-    if (val > (ULLONG_MAX / 1000ULL)) return -1;
+    if (val > (ULLONG_MAX / 1000ULL))
+      return -1;
     ms = val * 1000ULL;
     break;
   case 'm': // Millisecond
     ms = val;
     break;
-  case 'u': // Microsecond
+  case 'u':                        // Microsecond
     ms = (val + 999ULL) / 1000ULL; // Ceiling to at least 1ms if non-zero
     break;
-  case 'n': // Nanosecond
+  case 'n':                              // Nanosecond
     ms = (val + 999999ULL) / 1000000ULL; // Ceiling to at least 1ms if non-zero
     break;
   default:
@@ -116,19 +119,17 @@ EZGRPC2_API void ezgrpc2_server_check_deadlines(ezgrpc2_server *server) {
 
     for (size_t s = 0; s < count; s++) {
       if (server->events != nullptr) {
-        ezgrpc2_event ev = {
-          .type = EZGRPC2_EVENT_TIMEOUT,
-          .session_uuid = session->session_uuid,
-          .userdata = userdatas[s],
-          .timeout = {
-            .stream_id = expired_sids[s],
-          }
-        };
+        ezgrpc2_event ev = {.type = EZGRPC2_EVENT_TIMEOUT,
+                            .session_uuid = session->session_uuid,
+                            .userdata = userdatas[s],
+                            .timeout = {
+                                .stream_id = expired_sids[s],
+                            }};
         ezgrpc2_events_write(server->events, ev);
       }
       ezgrpc2_server_session_stream_end2(server, session->session_uuid, expired_sids[s],
-                                         EZGRPC2_GRPC_STATUS_DEADLINE_EXCEEDED,
-                                         "Deadline Exceeded", nullptr, 0);
+                                         EZGRPC2_GRPC_STATUS_DEADLINE_EXCEEDED, "Deadline Exceeded",
+                                         nullptr, 0);
     }
   }
   server->next_deadline_ms = next_deadline_ms;

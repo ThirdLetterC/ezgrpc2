@@ -31,7 +31,7 @@
 #ifdef __ANDROID__
 #include <android/api-level.h>
 #if __ANDROID_API__ < 28
-static inline void *aligned_alloc(size_t alignment, size_t size){
+static inline void *aligned_alloc(size_t alignment, size_t size) {
   void *ret = nullptr;
   if (posix_memalign(&ret, alignment, size))
     return nullptr;
@@ -46,10 +46,10 @@ static inline void *aligned_alloc(size_t alignment, size_t size){
 #endif
 
 #if __has_builtin(__builtin_expect)
-#define likely(x) __builtin_expect(!!(x), 1)
+#define likely(x)   __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #else
-#define likely(x) (x)
+#define likely(x)   (x)
 #define unlikely(x) (x)
 #endif /* __has_builtin(__builtin_expect) */
 
@@ -62,4 +62,3 @@ static inline void *aligned_alloc(size_t alignment, size_t size){
 #endif
 
 #endif
-

@@ -7,14 +7,16 @@
 #include <zlib.h>
 #endif
 
-EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t **out, size_t *out_len) {
+EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t **out,
+                                      size_t *out_len) {
   if (in == nullptr || out == nullptr || out_len == nullptr) {
     return 1;
   }
 #if defined(EZGRPC2_ENABLE_ZLIB)
   z_stream strm = {0};
   // 15 + 16 gives standard gzip header and trailer per zlib manual
-  if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+  if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) !=
+      Z_OK) {
     return 2;
   }
 
@@ -46,7 +48,8 @@ EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t 
 #endif
 }
 
-EZGRPC2_API int ezgrpc2_decompress_gzip(const uint8_t *in, size_t in_len, uint8_t **out, size_t *out_len) {
+EZGRPC2_API int ezgrpc2_decompress_gzip(const uint8_t *in, size_t in_len, uint8_t **out,
+                                        size_t *out_len) {
   if (in == nullptr || out == nullptr || out_len == nullptr) {
     return 1;
   }

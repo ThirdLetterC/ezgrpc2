@@ -8,12 +8,7 @@ CFLAGS+=$(EXTRACFLAGS)
 targets = multi_threaded.bin
 targets += single_threaded.bin
 
-ifeq ($(OS),Windows_NT)
-	LDFLAGS += -lWs2_32
-	LDFLAGS += -lRpcrt4
-else
-	LDFLAGS += -luuid
-endif
+LDFLAGS += -luuid
 
 ifeq ($(HAVE_SECCOMP),1)
   LDFLAGS += -lseccomp

@@ -9,28 +9,41 @@
 #include "ezgrpc2_session_info.h"
 #include "ezgrpc2_session_uuid.h"
 
-#define EZGRPC2_SERVER_LOG_ALL (uint32_t)0xffffffff
-#define EZGRPC2_SERVER_LOG_QUIET (uint32_t)(0)
-#define EZGRPC2_SERVER_LOG_NORMAL (uint32_t)(1)
+#define EZGRPC2_SERVER_LOG_ALL     (uint32_t)0xffffffff
+#define EZGRPC2_SERVER_LOG_QUIET   (uint32_t)(0)
+#define EZGRPC2_SERVER_LOG_NORMAL  (uint32_t)(1)
 #define EZGRPC2_SERVER_LOG_WARNING (uint32_t)(1 << 1)
-#define EZGRPC2_SERVER_LOG_ERROR (uint32_t)(1 << 2)
-#define EZGRPC2_SERVER_LOG_DEBUG (uint32_t)(1 << 3)
-#define EZGRPC2_SERVER_LOG_TRACE (uint32_t)(1 << 4)
+#define EZGRPC2_SERVER_LOG_ERROR   (uint32_t)(1 << 2)
+#define EZGRPC2_SERVER_LOG_DEBUG   (uint32_t)(1 << 3)
+#define EZGRPC2_SERVER_LOG_TRACE   (uint32_t)(1 << 4)
 
-#define EZGRPC2_LOG_NORMAL(server, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_NORMAL, __VA_ARGS__)
-#define EZGRPC2_LOG_ERROR(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_ERROR, COLSTR("error: " fmt, BHRED) __VA_OPT__(,) __VA_ARGS__)
-#define EZGRPC2_LOG_WARNING(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_WARNING, COLSTR("warning: " fmt, BHYEL) __VA_OPT__(,) __VA_ARGS__)
+#define EZGRPC2_LOG_NORMAL(server, ...) \
+  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_NORMAL, __VA_ARGS__)
+#define EZGRPC2_LOG_ERROR(server, fmt, ...)            \
+  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_ERROR, \
+                     COLSTR("error: " fmt, BHRED) __VA_OPT__(, ) __VA_ARGS__)
+#define EZGRPC2_LOG_WARNING(server, fmt, ...)            \
+  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_WARNING, \
+                     COLSTR("warning: " fmt, BHYEL) __VA_OPT__(, ) __VA_ARGS__)
 
 #ifdef EZGRPC2_DEBUG
-#define EZGRPC2_LOG_DEBUG(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_DEBUG, "@%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define EZGRPC2_LOG_DEBUG(server, fmt, ...)                         \
+  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_DEBUG, "@%s: " fmt, \
+                     __func__ __VA_OPT__(, ) __VA_ARGS__)
 #else
-#define EZGRPC2_LOG_DEBUG(server, ...) do {} while (0)
+#define EZGRPC2_LOG_DEBUG(server, ...) \
+  do {                                 \
+  } while (0)
 #endif
 
 #ifdef EZGRPC2_TRACE
-#define EZGRPC2_LOG_TRACE(server, fmt, ...)  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_TRACE, "@%s: " fmt, __func__ __VA_OPT__(,) __VA_ARGS__)
+#define EZGRPC2_LOG_TRACE(server, fmt, ...)                         \
+  ezgrpc2_server_log(server, EZGRPC2_SERVER_LOG_TRACE, "@%s: " fmt, \
+                     __func__ __VA_OPT__(, ) __VA_ARGS__)
 #else
-#define EZGRPC2_LOG_TRACE(server, ...) do {} while (0)
+#define EZGRPC2_LOG_TRACE(server, ...) \
+  do {                                 \
+  } while (0)
 #endif
 
 typedef struct ezgrpc2_server ezgrpc2_server;
@@ -62,13 +75,11 @@ struct ezgrpc2_server;
  *    ezgrpc2_server *ezgrpc2_server_new("0.0.0.0", 8080, "::", 8080, 16, NULL);
  *
  */
-EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
-  const char *restrict ipv4_addr, uint16_t ipv4_port,
-  const char *restrict ipv6_addr, uint16_t ipv6_port,
-  int backlog,
-  ezgrpc2_server_settings *restrict server_settings,
-  ezgrpc2_http2_settings *restrict http2_settings);
-
+EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(const char *restrict ipv4_addr, uint16_t ipv4_port,
+                                               const char *restrict ipv6_addr, uint16_t ipv6_port,
+                                               int backlog,
+                                               ezgrpc2_server_settings *restrict server_settings,
+                                               ezgrpc2_http2_settings *restrict http2_settings);
 
 /**
  * The :c:func:`ezgrpc2_server_poll()` function polls the server for any clients making a request to paths
@@ -91,11 +102,8 @@ EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new(
  *
  *
  */
-EZGRPC2_API int ezgrpc2_server_poll(
-  ezgrpc2_server *restrict server,
-  ezgrpc2_events *restrict events,
-  int timeout);
-
+EZGRPC2_API int ezgrpc2_server_poll(ezgrpc2_server *restrict server,
+                                    ezgrpc2_events *restrict events, int timeout);
 
 /**
  * The :c:func:`ezgrpc2_server_flush()` function writes the output queued by
@@ -109,22 +117,24 @@ EZGRPC2_API int ezgrpc2_server_poll(
  */
 EZGRPC2_API void ezgrpc2_server_flush(ezgrpc2_server *server);
 
-EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path, void *userdata, uint64_t accept_content_type, uint64_t accept_content_encoding);
+EZGRPC2_API int ezgrpc2_server_register_path(ezgrpc2_server *server, const char *path,
+                                             void *userdata, uint64_t accept_content_type,
+                                             uint64_t accept_content_encoding);
 
 EZGRPC2_API void *ezgrpc2_server_unregister_path(ezgrpc2_server *server, const char *path);
 
-EZGRPC2_API void ezgrpc2_server_free(
-  ezgrpc2_server *server);
+EZGRPC2_API void ezgrpc2_server_free(ezgrpc2_server *server);
 
 ezgrpc2_list *ezgrpc2_server_get_all_sessions_info(ezgrpc2_server *server);
 
-EZGRPC2_API ezgrpc2_session_info *ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server, ezgrpc2_session_uuid *restrict session_uuid);
+EZGRPC2_API ezgrpc2_session_info *
+ezgrpc2_server_get_session_info(ezgrpc2_server *restrict server,
+                                ezgrpc2_session_uuid *restrict session_uuid);
 
 EZGRPC2_API ezgrpc2_server_settings *ezgrpc2_server_get_server_settings(ezgrpc2_server *server);
 EZGRPC2_API ezgrpc2_http2_settings *ezgrpc2_server_get_http2_settings(ezgrpc2_server *server);
 
-EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level, const char *restrict fmt, ...);
-
+EZGRPC2_API void ezgrpc2_server_log(ezgrpc2_server *server, uint32_t log_level,
+                                    const char *restrict fmt, ...);
 
 #endif
-

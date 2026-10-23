@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include "core.h"
 #include "ezgrpc2_global.h"
-#ifdef _WIN32
-#include <Winsock2.h>
-#endif
 
 #include "ezgrpc2_events_struct.h"
 
@@ -17,19 +14,7 @@ EZGRPC2_API int ezgrpc2_global_init([[maybe_unused]] uint64_t unused) {
   PRINT_SIZE(ezgrpc2_message);
 #endif
 
-#ifdef _WIN32
-  int ret;
-  WSADATA wsa_data = {};
-  if ((ret = WSAStartup(0x0202, &wsa_data)) != 0) {
-    fprintf(stderr, "WSAStartup failed: error %d\n", ret);
-    return 1;
-  }
-#endif
   return 0;
 }
 
-EZGRPC2_API void ezgrpc2_global_cleanup(void) {
-#ifdef _WIN32
-  WSACleanup();
-#endif
-}
+EZGRPC2_API void ezgrpc2_global_cleanup(void) {}

@@ -12,7 +12,7 @@ typedef struct ezgrpc2_event_dataloss ezgrpc2_event_dataloss;
 typedef struct ezgrpc2_event ezgrpc2_event;
 
 /**
- * Types of events 
+ * Types of events
  */
 enum ezgrpc2_event_type {
   EZGRPC2_EVENT_CONNECT,
@@ -84,10 +84,9 @@ struct ezgrpc2_event {
   };
   void *userdata;
 
-
   ezgrpc2_event_type type;
 };
 
-//void ezgrpc2_event_free(ezgrpc2_event *event);
+// void ezgrpc2_event_free(ezgrpc2_event *event);
 
 #endif

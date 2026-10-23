@@ -9,7 +9,8 @@ void setUp(void) {}
 void tearDown(void) {}
 
 void test_gzip_compression_roundtrip(void) {
-  const char *sample = "Hello World! This is a test message to verify RFC 1952 gzip compression and decompression with zlib.";
+  const char *sample = "Hello World! This is a test message to verify RFC 1952 gzip compression "
+                       "and decompression with zlib.";
   size_t sample_len = strlen(sample);
 
   uint8_t *compressed = nullptr;

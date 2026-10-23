@@ -16,7 +16,8 @@ static inline ezgrpc2_list_message_t *ezgrpc2_list_message_new([[maybe_unused]] 
 }
 
 static inline void ezgrpc2_list_message_free(ezgrpc2_list_message_t *list) {
-  if (list == nullptr) return;
+  if (list == nullptr)
+    return;
   ezgrpc2_list *l = (ezgrpc2_list *)list;
   ezgrpc2_message *msg;
   while ((msg = (ezgrpc2_message *)ezgrpc2_list_pop_front(l)) != nullptr) {
@@ -25,11 +26,13 @@ static inline void ezgrpc2_list_message_free(ezgrpc2_list_message_t *list) {
   ezgrpc2_list_free(l);
 }
 
-static inline int ezgrpc2_list_message_push_back(ezgrpc2_list_message_t *list, ezgrpc2_message *message) {
+static inline int ezgrpc2_list_message_push_back(ezgrpc2_list_message_t *list,
+                                                 ezgrpc2_message *message) {
   return ezgrpc2_list_push_back((ezgrpc2_list *)list, (void *)message);
 }
 
-static inline int ezgrpc2_list_message_push_front(ezgrpc2_list_message_t *list, ezgrpc2_message *message) {
+static inline int ezgrpc2_list_message_push_front(ezgrpc2_list_message_t *list,
+                                                  ezgrpc2_message *message) {
   return ezgrpc2_list_push_front((ezgrpc2_list *)list, (void *)message);
 }
 
@@ -57,7 +60,8 @@ static inline int ezgrpc2_list_message_is_empty(ezgrpc2_list_message_t *list) {
   return ezgrpc2_list_is_empty((ezgrpc2_list *)list);
 }
 
-static inline void ezgrpc2_list_message_concat_and_empty_src(ezgrpc2_list_message_t *dst, ezgrpc2_list_message_t *src) {
+static inline void ezgrpc2_list_message_concat_and_empty_src(ezgrpc2_list_message_t *dst,
+                                                             ezgrpc2_list_message_t *src) {
   ezgrpc2_list_concat_and_empty_src((ezgrpc2_list *)dst, (ezgrpc2_list *)src);
 }
 

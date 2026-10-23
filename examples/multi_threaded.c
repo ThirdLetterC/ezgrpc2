@@ -34,11 +34,12 @@ struct userdata_t {
 
 struct path_userdata_t {
   char is_unary;
-  void *(*callback)(void*);
+  void *(*callback)(void *);
 };
 
 struct userdata_t *create_userdata(ezgrpc2_session_uuid session_uuid, int32_t stream_id,
-    ezgrpc2_messages *messages, char end_stream, ezgrpc2_grpc_status status) {
+                                   ezgrpc2_messages *messages, char end_stream,
+                                   ezgrpc2_grpc_status status) {
   struct userdata_t *data = malloc(sizeof(*data));
   data->session_uuid = session_uuid;
   data->stream_id = stream_id;
@@ -68,7 +69,7 @@ void *callback_path0(void *data) {
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message *msg = ezgrpc2_message_new(0, (void *)"    path0!", 11);
-    *(uint32_t*)(msg->data) = pp;
+    *(uint32_t *)(msg->data) = pp;
     ezgrpc2_messages_push(userdata->omessages, msg);
   }
 
@@ -87,7 +88,7 @@ void *callback_path1(void *data) {
   /* pretend this is our response (output messages) */
   for (int i = 0; i < 5; i++, pp++) {
     ezgrpc2_message *msg = ezgrpc2_message_new(0, (void *)"    path1!", 11);
-    *(uint32_t*)(msg->data) = pp;
+    *(uint32_t *)(msg->data) = pp;
     ezgrpc2_messages_push(userdata->omessages, msg);
   }
 
@@ -98,26 +99,23 @@ void *callback_path1(void *data) {
   return data;
 }
 
-static void handle_event_message(ezgrpc2_event *event,
-                                 ezgrpc2_server *server,
-                                 ezgrpc2_pthpool *opool,
-                                 ezgrpc2_pthpool *upool) {
+static void handle_event_message(ezgrpc2_event *event, ezgrpc2_server *server,
+                                 ezgrpc2_pthpool *opool, ezgrpc2_pthpool *upool) {
   size_t nb_msg = ezgrpc2_messages_count(event->message.messages);
   struct path_userdata_t *path_userdata = event->userdata;
   if (path_userdata->is_unary) {
     if (!event->message.end_stream || nb_msg != 1) {
       /* This is unary service, but they are sending more than one message */
-      ezgrpc2_server_session_stream_end(server, event->session_uuid,
-                                 event->message.stream_id,
-                                 EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
+      ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                        EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT);
       ezgrpc2_messages_free(event->message.messages);
       return;
     }
   }
 
-  struct userdata_t *data = create_userdata(event->session_uuid, event->message.stream_id,
-                         event->message.messages, event->message.end_stream,
-                         EZGRPC2_GRPC_STATUS_OK);
+  struct userdata_t *data =
+      create_userdata(event->session_uuid, event->message.stream_id, event->message.messages,
+                      event->message.end_stream, EZGRPC2_GRPC_STATUS_OK);
 
 #if 1
   if (path_userdata->is_unary)
@@ -129,15 +127,13 @@ static void handle_event_message(ezgrpc2_event *event,
 #endif
 }
 
-static void handle_event_dataloss(ezgrpc2_event *event,
-                                  [[maybe_unused]] ezgrpc2_server *server,
-                                  ezgrpc2_pthpool *opool,
-                                  ezgrpc2_pthpool *upool) {
+static void handle_event_dataloss(ezgrpc2_event *event, [[maybe_unused]] ezgrpc2_server *server,
+                                  ezgrpc2_pthpool *opool, ezgrpc2_pthpool *upool) {
   printf("stream_id %d, event dataloss\n", event->dataloss.stream_id);
   struct path_userdata_t *path_userdata = event->userdata;
-  struct userdata_t *data = create_userdata(event->session_uuid, event->dataloss.stream_id,
-                         ezgrpc2_messages_new(nullptr), 1,
-                         EZGRPC2_GRPC_STATUS_DATA_LOSS);
+  struct userdata_t *data =
+      create_userdata(event->session_uuid, event->dataloss.stream_id, ezgrpc2_messages_new(nullptr),
+                      1, EZGRPC2_GRPC_STATUS_DATA_LOSS);
 
   if (path_userdata->is_unary)
     ezgrpc2_pthpool_add_task(upool, path_userdata->callback, data, nullptr, nullptr);
@@ -145,8 +141,8 @@ static void handle_event_dataloss(ezgrpc2_event *event,
     ezgrpc2_pthpool_add_task(opool, path_userdata->callback, data, nullptr, nullptr);
 }
 
-static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events,
-                          ezgrpc2_pthpool *opool, ezgrpc2_pthpool *upool) {
+static void handle_events(ezgrpc2_server *server, ezgrpc2_events *events, ezgrpc2_pthpool *opool,
+                          ezgrpc2_pthpool *upool) {
   ezgrpc2_event *event;
   size_t nb_event;
   /* check for events in the paths */
@@ -189,21 +185,23 @@ static void handle_thread_pool(ezgrpc2_server *server, ezgrpc2_pthpool *pool) {
       ezgrpc2_pthpool_result_free(result);
       continue;
     }
-    switch (ezgrpc2_server_session_stream_send(server, data->session_uuid, data->stream_id, data->omessages)) {
-      case 0:
-        if (data->end_stream)
-          ezgrpc2_server_session_stream_end(server, data->session_uuid, data->stream_id, data->status);
-        break;
-      case 1:
-        break;
-      case 2:
-        printf("stream id doesn't exist %d\n", data->stream_id);
-        break;
-      case 3:
-        printf("fatal\n");
-        break;
-      default:
-        assert(0);
+    switch (ezgrpc2_server_session_stream_send(server, data->session_uuid, data->stream_id,
+                                               data->omessages)) {
+    case 0:
+      if (data->end_stream)
+        ezgrpc2_server_session_stream_end(server, data->session_uuid, data->stream_id,
+                                          data->status);
+      break;
+    case 1:
+      break;
+    case 2:
+      printf("stream id doesn't exist %d\n", data->stream_id);
+      break;
+    case 3:
+      printf("fatal\n");
+      break;
+    default:
+      assert(0);
     }
     ezgrpc2_pthpool_result_free(result);
     free_userdata(data);
@@ -236,7 +234,7 @@ int main(void) {
   const size_t nb_paths = 2;
   struct path_userdata_t path_userdata[nb_paths];
   res = ezgrpc2_global_init(0);
-  if (res) 
+  if (res)
     abort();
 
 #ifdef __unix__
@@ -278,7 +276,8 @@ int main(void) {
   ezgrpc2_server_settings_set_log_fp(server_settings, stderr);
 
   /* The heart of this API */
-  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, nullptr);
+  ezgrpc2_server *server =
+      ezgrpc2_server_new("0.0.0.0", 19009, "::", 19009, 16, server_settings, nullptr);
   ezgrpc2_server_settings_free(server_settings);
   assert(server != nullptr);
 
@@ -288,8 +287,10 @@ int main(void) {
   path_userdata[1].is_unary = 1;
   path_userdata[1].callback = callback_path1;
 
-  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service1", path_userdata, 0, 0);
-  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service2", path_userdata + 1, 0, 0);
+  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service1", path_userdata, 0,
+                                     0);
+  (void)ezgrpc2_server_register_path(server, "/test.yourAPI/whatever_service2", path_userdata + 1,
+                                     0, 0);
 
   ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
   while (1) {
@@ -297,8 +298,8 @@ int main(void) {
     if (sigterm_flag)
       break;
 #endif
-    int is_pool_empty = ezgrpc2_pthpool_is_empty(unordered_pool) &&
-                        ezgrpc2_pthpool_is_empty(ordered_pool);
+    int is_pool_empty =
+        ezgrpc2_pthpool_is_empty(unordered_pool) && ezgrpc2_pthpool_is_empty(ordered_pool);
 
     int timeout = is_pool_empty ? 10000 : 10;
     if ((res = ezgrpc2_server_poll(server, events, timeout)) < 0)

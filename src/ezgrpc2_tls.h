@@ -39,11 +39,8 @@ EZGRPC2_API void ezgrpc2_tls_free_server_ctx(SSL_CTX *ctx);
  * Enables TLS on an existing ezgrpc2_server.
  * Returns 0 on success, non-zero on error.
  */
-EZGRPC2_API int ezgrpc2_server_enable_tls(
-  struct ezgrpc2_server *server,
-  const char *cert_file,
-  const char *key_file
-);
+EZGRPC2_API int ezgrpc2_server_enable_tls(struct ezgrpc2_server *server, const char *cert_file,
+                                          const char *key_file);
 
 /**
  * Creates an ezgrpc2_server configured for TLS over HTTP/2.
@@ -51,17 +48,11 @@ EZGRPC2_API int ezgrpc2_server_enable_tls(
 struct ezgrpc2_http2_settings;
 struct ezgrpc2_server_settings;
 
-EZGRPC2_API struct ezgrpc2_server *ezgrpc2_server_new_tls(
-  const char *ipv4_addr,
-  uint16_t ipv4_port,
-  const char *ipv6_addr,
-  uint16_t ipv6_port,
-  int backlog,
-  const char *cert_file,
-  const char *key_file,
-  struct ezgrpc2_server_settings *server_settings,
-  struct ezgrpc2_http2_settings *http2_settings
-);
+EZGRPC2_API struct ezgrpc2_server *
+ezgrpc2_server_new_tls(const char *ipv4_addr, uint16_t ipv4_port, const char *ipv6_addr,
+                       uint16_t ipv6_port, int backlog, const char *cert_file, const char *key_file,
+                       struct ezgrpc2_server_settings *server_settings,
+                       struct ezgrpc2_http2_settings *http2_settings);
 
 /**
  * Initializes SSL object for a newly accepted session if server has TLS enabled.

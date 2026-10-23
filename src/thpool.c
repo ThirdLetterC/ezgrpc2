@@ -5,13 +5,12 @@
 #include "thpool.h"
 #include "thpool_struct.h"
 
-#define force_assert(s)                                                        \
-  do {                                                                         \
-    if (!(s)) {                                                                \
-      fprintf(stderr, "%s:%d @ %s: assertion failed: " #s "\n", __FILE__,      \
-              __LINE__, __func__);                                             \
-      abort();                                                                 \
-    }                                                                          \
+#define force_assert(s)                                                                        \
+  do {                                                                                         \
+    if (!(s)) {                                                                                \
+      fprintf(stderr, "%s:%d @ %s: assertion failed: " #s "\n", __FILE__, __LINE__, __func__); \
+      abort();                                                                                 \
+    }                                                                                          \
   } while (0)
 
 typedef struct task_t task_t;
@@ -92,7 +91,8 @@ thpool *thpool_new(int workers, int flags) {
   return pool;
 }
 
-int thpool_add_task(thpool *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*)) {
+int thpool_add_task(thpool *pool, void (*func)(void *), void *userdata,
+                    void (*userdata_cleanup)(void *)) {
   force_assert(!pthread_mutex_lock(&pool->mutex));
   int c = 0;
 
@@ -123,12 +123,13 @@ void thpool_stop_and_join(thpool *pool) {
   pool->stop = 1;
   force_assert(!pthread_cond_broadcast(&pool->wcond));
   force_assert(!pthread_mutex_unlock(&pool->mutex));
-  for (int i = 0; i < pool->nb_threads; i++) 
+  for (int i = 0; i < pool->nb_threads; i++)
     pthread_join(pool->threads[i], nullptr);
 }
 
 void thpool_cleanup(thpool *pool) {
-  if (pool == nullptr) return;
+  if (pool == nullptr)
+    return;
   thpool_stop_and_join(pool);
 
   task_t *d;
@@ -145,7 +146,8 @@ void thpool_cleanup(thpool *pool) {
 }
 
 void thpool_free(thpool *pool) {
-  if (pool == nullptr) return;
+  if (pool == nullptr)
+    return;
   thpool_cleanup(pool);
   free(pool);
 }

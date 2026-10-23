@@ -20,14 +20,16 @@ typedef enum {
  * Allocates *out with ezgrpc2_malloc. Caller frees with ezgrpc2_free.
  * Returns 0 on success, non-zero on failure.
  */
-EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t **out, size_t *out_len);
+EZGRPC2_API int ezgrpc2_compress_gzip(const uint8_t *in, size_t in_len, uint8_t **out,
+                                      size_t *out_len);
 
 /**
  * Decompresses gzip data (RFC 1952).
  * Allocates *out with ezgrpc2_malloc. Caller frees with ezgrpc2_free.
  * Returns 0 on success, non-zero on failure.
  */
-EZGRPC2_API int ezgrpc2_decompress_gzip(const uint8_t *in, size_t in_len, uint8_t **out, size_t *out_len);
+EZGRPC2_API int ezgrpc2_decompress_gzip(const uint8_t *in, size_t in_len, uint8_t **out,
+                                        size_t *out_len);
 
 /**
  * Returns a new ezgrpc2_message with gzip-compressed payload and cflag = 1.

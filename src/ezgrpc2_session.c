@@ -48,20 +48,19 @@
 #include "internal_nghttp2_callbacks.h"
 #include "internal_helpers.h"
 
-#define EZWINDOW_SIZE (1<<20)
+#define EZWINDOW_SIZE (1 << 20)
 
 #define atlog(fmt, ...) ezlog("@ %s: " fmt, __func__, ##__VA_ARGS__)
 
 /* Output is not written here. The session is queued and all of its frames
  * (from every stream) are written with a single write at the start of the
  * next ezgrpc2_server_poll(), or with ezgrpc2_server_flush(). */
-EZGRPC2_API int ezgrpc2_server_session_stream_send(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_messages *messages) {
-  ezgrpc2_list *lmessages = (ezgrpc2_list*)messages;
-  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+EZGRPC2_API int ezgrpc2_server_session_stream_send(ezgrpc2_server *ezserver,
+                                                   ezgrpc2_session_uuid session_uuid, i32 stream_id,
+                                                   ezgrpc2_messages *messages) {
+  ezgrpc2_list *lmessages = (ezgrpc2_list *)messages;
+  ezgrpc2_session *ezsession =
+      session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
   }
@@ -80,8 +79,8 @@ EZGRPC2_API int ezgrpc2_server_session_stream_send(
     data_provider.read_callback = data_source_read_callback2;
     int res = nghttp2_submit_data(ezsession->ngsession, 0, stream_id, &data_provider);
     if (res) {
-      EZGRPC2_LOG_ERROR(ezserver, "@ %s: %p.%p: nghttp2: %s\n", __func__, (void*)ezserver, (void*) ezsession,
-            nghttp2_strerror(res));
+      EZGRPC2_LOG_ERROR(ezserver, "@ %s: %p.%p: nghttp2: %s\n", __func__, (void *)ezserver,
+                        (void *)ezsession, nghttp2_strerror(res));
       return 3;
     }
     ezstream->is_data_active = true;
@@ -114,15 +113,14 @@ static nghttp2_nv *nva_dup(const nghttp2_nv *nva, size_t nvlen) {
 #include "ezgrpc2_metadata.h"
 #include "ezgrpc2_header.h"
 
-EZGRPC2_API int ezgrpc2_server_session_stream_end2(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_grpc_status status,
-  const char *custom_status_message,
-  const ezgrpc2_metadata_entry *trailers,
-  size_t nb_trailers) {
-  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+EZGRPC2_API int ezgrpc2_server_session_stream_end2(ezgrpc2_server *ezserver,
+                                                   ezgrpc2_session_uuid session_uuid, i32 stream_id,
+                                                   ezgrpc2_grpc_status status,
+                                                   const char *custom_status_message,
+                                                   const ezgrpc2_metadata_entry *trailers,
+                                                   size_t nb_trailers) {
+  ezgrpc2_session *ezsession =
+      session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
   }
@@ -133,7 +131,8 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end2(
 
   char grpc_status[32] = {};
   int len = snprintf(grpc_status, sizeof(grpc_status), "%d", (int)status);
-  const char *grpc_message = custom_status_message ? custom_status_message : ezgrpc2_grpc_status_strstatus(status);
+  const char *grpc_message =
+      custom_status_message ? custom_status_message : ezgrpc2_grpc_status_strstatus(status);
 
   size_t total_trailers = 2 + nb_trailers;
   nghttp2_nv *nva = malloc(total_trailers * sizeof(nghttp2_nv));
@@ -141,17 +140,18 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end2(
     return 1;
   }
 
-  nva[0] = (nghttp2_nv){(uint8_t *)"grpc-status", (uint8_t *)grpc_status, 11, (size_t)len, NGHTTP2_NV_FLAG_NONE};
-  nva[1] = (nghttp2_nv){(uint8_t *)"grpc-message", (uint8_t *)grpc_message, 12, strlen(grpc_message), NGHTTP2_NV_FLAG_NONE};
+  nva[0] = (nghttp2_nv){(uint8_t *)"grpc-status", (uint8_t *)grpc_status, 11, (size_t)len,
+                        NGHTTP2_NV_FLAG_NONE};
+  nva[1] = (nghttp2_nv){(uint8_t *)"grpc-message", (uint8_t *)grpc_message, 12,
+                        strlen(grpc_message), NGHTTP2_NV_FLAG_NONE};
 
   for (size_t i = 0; i < nb_trailers; i++) {
     nva[2 + i] = (nghttp2_nv){
-      .name = (uint8_t *)trailers[i].key,
-      .value = (uint8_t *)trailers[i].value,
-      .namelen = trailers[i].key_len ? trailers[i].key_len : strlen(trailers[i].key),
-      .valuelen = trailers[i].value_len ? trailers[i].value_len : strlen(trailers[i].value),
-      .flags = NGHTTP2_NV_FLAG_NONE
-    };
+        .name = (uint8_t *)trailers[i].key,
+        .value = (uint8_t *)trailers[i].value,
+        .namelen = trailers[i].key_len ? trailers[i].key_len : strlen(trailers[i].key),
+        .valuelen = trailers[i].value_len ? trailers[i].value_len : strlen(trailers[i].value),
+        .flags = NGHTTP2_NV_FLAG_NONE};
   }
 
   int res = 0;
@@ -174,23 +174,21 @@ EZGRPC2_API int ezgrpc2_server_session_stream_end2(
   return res;
 }
 
-EZGRPC2_API int ezgrpc2_server_session_stream_end(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_grpc_status status) {
-  return ezgrpc2_server_session_stream_end2(ezserver, session_uuid, stream_id, status, nullptr, nullptr, 0);
+EZGRPC2_API int ezgrpc2_server_session_stream_end(ezgrpc2_server *ezserver,
+                                                  ezgrpc2_session_uuid session_uuid, i32 stream_id,
+                                                  ezgrpc2_grpc_status status) {
+  return ezgrpc2_server_session_stream_end2(ezserver, session_uuid, stream_id, status, nullptr,
+                                            nullptr, 0);
 }
 
-EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 stream_id,
-  ezgrpc2_header *ezheader) {
+EZGRPC2_API int ezgrpc2_server_session_stream_find_header(ezgrpc2_server *ezserver,
+                                                          ezgrpc2_session_uuid session_uuid,
+                                                          i32 stream_id, ezgrpc2_header *ezheader) {
   if (ezserver == nullptr || ezheader == nullptr || ezheader->name == nullptr) {
     return 1;
   }
-  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+  ezgrpc2_session *ezsession =
+      session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     return 1;
   }
@@ -210,12 +208,11 @@ EZGRPC2_API int ezgrpc2_server_session_stream_find_header(
   return 3;
 }
 
-EZGRPC2_API int ezgrpc2_server_session_end(
-  ezgrpc2_server *ezserver,
-  ezgrpc2_session_uuid session_uuid,
-  i32 last_stream_id,
-  int error_code) {
-  ezgrpc2_session *ezsession = session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
+EZGRPC2_API int ezgrpc2_server_session_end(ezgrpc2_server *ezserver,
+                                           ezgrpc2_session_uuid session_uuid, i32 last_stream_id,
+                                           int error_code) {
+  ezgrpc2_session *ezsession =
+      session_find(ezserver->sessions, ezserver->nb_sessions, session_uuid);
   if (ezsession == nullptr || ezsession->ngsession == nullptr) {
     /* session doesn't exist */
     return 1;
@@ -227,65 +224,33 @@ EZGRPC2_API int ezgrpc2_server_session_end(
 }
 
 EZGRPC2_API const char *ezgrpc2_license(void) {
-  static const char *license = 
-    "ezgrpc2 - A grpc server without the extra fancy features.\n"
-    "https://github.com/mnyoshie/ezgrpc2\n"
-    "\n"
-    "Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari\n"
-    "\n"
-    "Redistribution and use in source and binary forms, with or without\n"
-    "modification, are permitted provided that the following conditions\n"
-    "are met:\n"
-    "\n"
-    "  1. Redistributions of source code must retain the above copyright notice,\n"
-    "  this list of conditions and the following disclaimer.\n"
-    "\n"
-    "  2. Neither the name of the copyright holder nor the names of its\n"
-    "  contributors may be used to endorse or promote products derived from\n"
-    "  this software without specific prior written permission.\n"
-    "\n"
-    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
-    "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
-    "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
-    "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
-    "HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
-    "SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED\n"
-    "TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR\n"
-    "PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF\n"
-    "LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING\n"
-    "NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
-    "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
-#ifdef _WIN32
-    "\n"
-    "wepoll - epoll for Windows\n"
-    "https://github.com/piscisaureus/wepoll\n"
-    "\n"
-    "Copyright 2012-2020, Bert Belder <bertbelder@gmail.com>\n"
-    "All rights reserved.\n"
-    "\n"
-    "Redistribution and use in source and binary forms, with or without\n"
-    "modification, are permitted provided that the following conditions are\n"
-    "met:\n"
-    "\n"
-    "  * Redistributions of source code must retain the above copyright\n"
-    "    notice, this list of conditions and the following disclaimer.\n"
-    "\n"
-    "  * Redistributions in binary form must reproduce the above copyright\n"
-    "    notice, this list of conditions and the following disclaimer in the\n"
-    "    documentation and/or other materials provided with the distribution.\n"
-    "\n"
-    "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
-    "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
-    "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
-    "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
-    "OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
-    "SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT\n"
-    "LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,\n"
-    "DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY\n"
-    "THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n"
-    "(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\n"
-    "OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
-#endif
-    ;
+  static const char *license =
+      "ezgrpc2 - A grpc server without the extra fancy features.\n"
+      "https://github.com/mnyoshie/ezgrpc2\n"
+      "\n"
+      "Copyright (c) 2023-2025 M. N. Yoshie & Al-buharie Amjari\n"
+      "\n"
+      "Redistribution and use in source and binary forms, with or without\n"
+      "modification, are permitted provided that the following conditions\n"
+      "are met:\n"
+      "\n"
+      "  1. Redistributions of source code must retain the above copyright notice,\n"
+      "  this list of conditions and the following disclaimer.\n"
+      "\n"
+      "  2. Neither the name of the copyright holder nor the names of its\n"
+      "  contributors may be used to endorse or promote products derived from\n"
+      "  this software without specific prior written permission.\n"
+      "\n"
+      "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n"
+      "\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\n"
+      "LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR\n"
+      "A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\n"
+      "HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\n"
+      "SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED\n"
+      "TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR\n"
+      "PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF\n"
+      "LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING\n"
+      "NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\n"
+      "SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n";
   return license;
 }

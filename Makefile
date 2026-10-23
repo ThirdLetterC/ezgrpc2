@@ -1,3 +1,5 @@
+.PHONY: all test help clean format format-check
+
 
 all :
 	$(MAKE) -C src
@@ -8,11 +10,23 @@ test: all
 	$(MAKE) -C examples/python_client_c_server test
 	$(MAKE) -C examples/python_client_c_server test-tls
 
+# C sources to format; src/tests/unity is vendored (see .clang-format-ignore)
+FORMAT_FILES = $(shell git ls-files '*.c' '*.h' | grep -v '^src/tests/unity/')
+CLANG_FORMAT ?= clang-format
+
+format:
+	$(CLANG_FORMAT) -i $(FORMAT_FILES)
+
+format-check:
+	@$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_FILES)
+
 help:
 	@echo "Available targets:"
 	@echo "  all               - Builds src/libezgrpc2.{a,so} and examples/*"
 	@echo "  test              - Runs unit tests and Python client integration tests"
 	@echo "  clean             - Removes generated *.o, *.so and executables"
+	@echo "  format            - Formats the C sources with clang-format"
+	@echo "  format-check      - Fails if any C source is not clang-formatted"
 	@echo ""
 	@echo "  make D=1 all        enables -ggdb3 and server debug logs for development"
 	@echo "  make T=1 all        enables server trace logs for development (may provide heavy overheads)"

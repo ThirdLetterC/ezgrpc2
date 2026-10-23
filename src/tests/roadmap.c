@@ -103,21 +103,26 @@ void test_http2_settings_api(void) {
   TEST_ASSERT_NOT_NULL(settings);
 
   // Test defaults
-  TEST_ASSERT_EQUAL_UINT64(1 << 20, (uint64_t)ezgrpc2_http2_settings_get_initial_window_size(settings));
-  TEST_ASSERT_EQUAL_UINT64(16 * 1024, (uint64_t)ezgrpc2_http2_settings_get_max_frame_size(settings));
-  TEST_ASSERT_EQUAL_UINT64(1024, (uint64_t)ezgrpc2_http2_settings_get_max_concurrent_streams(settings));
+  TEST_ASSERT_EQUAL_UINT64(1 << 20,
+                           (uint64_t)ezgrpc2_http2_settings_get_initial_window_size(settings));
+  TEST_ASSERT_EQUAL_UINT64(16 * 1024,
+                           (uint64_t)ezgrpc2_http2_settings_get_max_frame_size(settings));
+  TEST_ASSERT_EQUAL_UINT64(1024,
+                           (uint64_t)ezgrpc2_http2_settings_get_max_concurrent_streams(settings));
   TEST_ASSERT_EQUAL_UINT64(1024, (uint64_t)ezgrpc2_http2_settings_get_max_sessions(settings));
   TEST_ASSERT_EQUAL_UINT64(10, (uint64_t)ezgrpc2_http2_settings_get_max_paths(settings));
 
   // Test setters and getters
   ezgrpc2_http2_settings_set_initial_window_size(settings, 65535);
-  TEST_ASSERT_EQUAL_UINT64(65535, (uint64_t)ezgrpc2_http2_settings_get_initial_window_size(settings));
+  TEST_ASSERT_EQUAL_UINT64(65535,
+                           (uint64_t)ezgrpc2_http2_settings_get_initial_window_size(settings));
 
   ezgrpc2_http2_settings_set_max_frame_size(settings, 32768);
   TEST_ASSERT_EQUAL_UINT64(32768, (uint64_t)ezgrpc2_http2_settings_get_max_frame_size(settings));
 
   ezgrpc2_http2_settings_set_max_concurrent_streams(settings, 500);
-  TEST_ASSERT_EQUAL_UINT64(500, (uint64_t)ezgrpc2_http2_settings_get_max_concurrent_streams(settings));
+  TEST_ASSERT_EQUAL_UINT64(500,
+                           (uint64_t)ezgrpc2_http2_settings_get_max_concurrent_streams(settings));
 
   ezgrpc2_http2_settings_set_max_sessions(settings, 2048);
   TEST_ASSERT_EQUAL_UINT64(2048, (uint64_t)ezgrpc2_http2_settings_get_max_sessions(settings));
@@ -152,7 +157,8 @@ void test_server_settings_api(void) {
   TEST_ASSERT_EQUAL_UINT64(256, (uint64_t)ezgrpc2_server_settings_get_max_connections(settings));
 
   ezgrpc2_server_settings_set_log_level(settings, EZGRPC2_SERVER_LOG_DEBUG);
-  TEST_ASSERT_EQUAL_UINT32(EZGRPC2_SERVER_LOG_DEBUG, ezgrpc2_server_settings_get_log_level(settings));
+  TEST_ASSERT_EQUAL_UINT32(EZGRPC2_SERVER_LOG_DEBUG,
+                           ezgrpc2_server_settings_get_log_level(settings));
 
   ezgrpc2_server_settings_set_log_fp(settings, stdout);
   TEST_ASSERT_EQUAL_PTR(stdout, ezgrpc2_server_settings_get_log_fp(settings));
@@ -161,7 +167,8 @@ void test_server_settings_api(void) {
   TEST_ASSERT_EQUAL_UINT64(8192, (uint64_t)ezgrpc2_server_settings_get_arena_events_size(settings));
 
   ezgrpc2_server_settings_set_arena_messages_size(settings, 65536);
-  TEST_ASSERT_EQUAL_UINT64(65536, (uint64_t)ezgrpc2_server_settings_get_arena_messages_size(settings));
+  TEST_ASSERT_EQUAL_UINT64(65536,
+                           (uint64_t)ezgrpc2_server_settings_get_arena_messages_size(settings));
 
   // Test copy
   ezgrpc2_server_settings *copy = ezgrpc2_server_settings_new(nullptr);
@@ -188,11 +195,13 @@ void test_server_settings_integration(void) {
 
   ezgrpc2_server_settings *active_srv_set = ezgrpc2_server_get_server_settings(server);
   TEST_ASSERT_NOT_NULL(active_srv_set);
-  TEST_ASSERT_EQUAL_UINT64(32, (uint64_t)ezgrpc2_server_settings_get_max_connections(active_srv_set));
+  TEST_ASSERT_EQUAL_UINT64(32,
+                           (uint64_t)ezgrpc2_server_settings_get_max_connections(active_srv_set));
 
   ezgrpc2_http2_settings *active_h2_set = ezgrpc2_server_get_http2_settings(server);
   TEST_ASSERT_NOT_NULL(active_h2_set);
-  TEST_ASSERT_EQUAL_UINT64(128, (uint64_t)ezgrpc2_http2_settings_get_max_concurrent_streams(active_h2_set));
+  TEST_ASSERT_EQUAL_UINT64(
+      128, (uint64_t)ezgrpc2_http2_settings_get_max_concurrent_streams(active_h2_set));
 
   ezgrpc2_server_free(server);
   ezgrpc2_server_settings_free(srv_set);

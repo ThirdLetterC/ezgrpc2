@@ -11,7 +11,7 @@
 #include "core.h"
 
 #define MAX_DESCRIPTORS 32
-#define MAX_SYMBOL_LEN 128
+#define MAX_SYMBOL_LEN  128
 
 typedef struct descriptor_entry {
   char symbol[MAX_SYMBOL_LEN];
@@ -39,7 +39,8 @@ static size_t write_varint(uint8_t *buf, uint64_t val) {
   do {
     uint8_t b = (uint8_t)(val & 0x7F);
     val >>= 7;
-    if (val != 0) b |= 0x80;
+    if (val != 0)
+      b |= 0x80;
     buf[len++] = b;
   } while (val != 0);
   return len;
@@ -51,16 +52,16 @@ static uint64_t read_varint(const uint8_t *buf, size_t len, size_t *seek) {
   while (*seek < len) {
     uint8_t b = buf[(*seek)++];
     val |= (uint64_t)(b & 0x7F) << shift;
-    if (!(b & 0x80)) break;
+    if (!(b & 0x80))
+      break;
     shift += 7;
   }
   return val;
 }
 
-EZGRPC2_API int ezgrpc2_reflection_add_file_descriptor(
-  const char *symbol_or_filename,
-  const uint8_t *descriptor_bytes,
-  size_t descriptor_len) {
+EZGRPC2_API int ezgrpc2_reflection_add_file_descriptor(const char *symbol_or_filename,
+                                                       const uint8_t *descriptor_bytes,
+                                                       size_t descriptor_len) {
   if (symbol_or_filename == nullptr || descriptor_bytes == nullptr || descriptor_len == 0) {
     return 1;
   }
@@ -93,25 +94,29 @@ EZGRPC2_API int ezgrpc2_reflection_register(ezgrpc2_server *server) {
     return 1;
   }
   int rc1 = ezgrpc2_server_register_path(server, EZGRPC2_REFLECTION_V1ALPHA_PATH,
-                                       (void *)&s_reflection_userdata_marker, 0, 0);
+                                         (void *)&s_reflection_userdata_marker, 0, 0);
   int rc2 = ezgrpc2_server_register_path(server, EZGRPC2_REFLECTION_V1_PATH,
-                                       (void *)&s_reflection_userdata_marker, 0, 0);
+                                         (void *)&s_reflection_userdata_marker, 0, 0);
   return (rc1 == 0 && rc2 == 0) ? 0 : 1;
 }
 
-static size_t collect_services(ezgrpc2_server *server, char services[][MAX_SYMBOL_LEN], size_t max_services) {
+static size_t collect_services(ezgrpc2_server *server, char services[][MAX_SYMBOL_LEN],
+                               size_t max_services) {
   size_t count = 0;
 
   for (size_t i = 0; i < server->nb_paths && count < max_services; i++) {
     const char *p = server->paths[i].path;
-    if (p == nullptr || *p != '/') continue;
+    if (p == nullptr || *p != '/')
+      continue;
 
     const char *service_start = p + 1;
     const char *service_end = strchr(service_start, '/');
-    if (service_end == nullptr) continue;
+    if (service_end == nullptr)
+      continue;
 
     size_t s_len = (size_t)(service_end - service_start);
-    if (s_len == 0 || s_len >= MAX_SYMBOL_LEN) continue;
+    if (s_len == 0 || s_len >= MAX_SYMBOL_LEN)
+      continue;
 
     char svc[MAX_SYMBOL_LEN];
     memcpy(svc, service_start, s_len);
@@ -146,13 +151,9 @@ static size_t collect_services(ezgrpc2_server *server, char services[][MAX_SYMBO
   return count;
 }
 
-static uint8_t *build_list_services_response(
-  const char services[][MAX_SYMBOL_LEN],
-  size_t nb_services,
-  const uint8_t *orig_req,
-  size_t orig_req_len,
-  size_t *out_resp_len) {
-
+static uint8_t *build_list_services_response(const char services[][MAX_SYMBOL_LEN],
+                                             size_t nb_services, const uint8_t *orig_req,
+                                             size_t orig_req_len, size_t *out_resp_len) {
   // Calculate size of ListServiceResponse
   size_t list_resp_inner = 0;
   for (size_t i = 0; i < nb_services; i++) {
@@ -174,7 +175,8 @@ static uint8_t *build_list_services_response(
 
   size_t total = orig_req_field_size + list_field_size;
   uint8_t *buf = ezgrpc2_malloc(total);
-  if (buf == nullptr) return nullptr;
+  if (buf == nullptr)
+    return nullptr;
 
   size_t off = 0;
   if (orig_req_len > 0) {
@@ -204,9 +206,7 @@ static uint8_t *build_list_services_response(
   return buf;
 }
 
-EZGRPC2_API bool ezgrpc2_reflection_handle_event(
-  ezgrpc2_server *server,
-  ezgrpc2_event *event) {
+EZGRPC2_API bool ezgrpc2_reflection_handle_event(ezgrpc2_server *server, ezgrpc2_event *event) {
   if (server == nullptr || event == nullptr) {
     return false;
   }
@@ -221,7 +221,8 @@ EZGRPC2_API bool ezgrpc2_reflection_handle_event(
   ezgrpc2_message *in_msg = ezgrpc2_messages_peek_front(event->message.messages);
   if (in_msg == nullptr) {
     if (event->message.end_stream) {
-      ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+      ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                        EZGRPC2_GRPC_STATUS_OK);
     }
     return true;
   }
@@ -277,7 +278,8 @@ EZGRPC2_API bool ezgrpc2_reflection_handle_event(
     pthread_mutex_lock(&s_reflection_lock);
     const descriptor_entry *found = nullptr;
     for (size_t i = 0; i < s_descriptors_count; i++) {
-      if (strstr(s_descriptors[i].symbol, queried_symbol) || strstr(queried_symbol, s_descriptors[i].symbol)) {
+      if (strstr(s_descriptors[i].symbol, queried_symbol) ||
+          strstr(queried_symbol, s_descriptors[i].symbol)) {
         found = &s_descriptors[i];
         break;
       }
@@ -327,7 +329,7 @@ EZGRPC2_API bool ezgrpc2_reflection_handle_event(
         resp_bytes[off++] = (7 << 3) | 2; // 0x3A (error_response)
         off += write_varint(resp_bytes + off, err_inner);
 
-        resp_bytes[off++] = (1 << 3) | 0; // 0x08 (error_code)
+        resp_bytes[off++] = (1 << 3) | 0;         // 0x08 (error_code)
         off += write_varint(resp_bytes + off, 5); // NOT_FOUND
 
         resp_bytes[off++] = (2 << 3) | 2; // 0x12 (error_message)
@@ -346,12 +348,14 @@ EZGRPC2_API bool ezgrpc2_reflection_handle_event(
     ezgrpc2_messages *res_msgs = ezgrpc2_messages_new(nullptr);
     ezgrpc2_messages_push(res_msgs, out_msg);
 
-    ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
+    ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id,
+                                       res_msgs);
     ezgrpc2_messages_free(res_msgs);
   }
 
   if (event->message.end_stream) {
-    ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+    ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                      EZGRPC2_GRPC_STATUS_OK);
   }
 
   return true;

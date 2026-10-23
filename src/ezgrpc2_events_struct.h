@@ -4,12 +4,11 @@
 #include "ezgrpc2_events.h"
 #include "ezgrpc2_list_struct.h"
 
-
 struct ezgrpc2_events {
   /* list of array ezgrpc2_event[X] */
   ezgrpc2_list bevents;
   /* 0 to X-1 */
-  //size_t rindex
+  // size_t rindex
   size_t windex;
 };
 

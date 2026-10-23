@@ -16,7 +16,8 @@ static inline ezgrpc2_list_event_t *ezgrpc2_list_event_new([[maybe_unused]] void
 }
 
 static inline void ezgrpc2_list_event_free(ezgrpc2_list_event_t *list) {
-  if (list == nullptr) return;
+  if (list == nullptr)
+    return;
   ezgrpc2_list *l = (ezgrpc2_list *)list;
   ezgrpc2_event *ev;
   while ((ev = (ezgrpc2_event *)ezgrpc2_list_pop_front(l)) != nullptr) {
@@ -60,7 +61,8 @@ static inline int ezgrpc2_list_event_is_empty(ezgrpc2_list_event_t *list) {
   return ezgrpc2_list_is_empty((ezgrpc2_list *)list);
 }
 
-static inline void ezgrpc2_list_event_concat_and_empty_src(ezgrpc2_list_event_t *dst, ezgrpc2_list_event_t *src) {
+static inline void ezgrpc2_list_event_concat_and_empty_src(ezgrpc2_list_event_t *dst,
+                                                           ezgrpc2_list_event_t *src) {
   ezgrpc2_list_concat_and_empty_src((ezgrpc2_list *)dst, (ezgrpc2_list *)src);
 }
 

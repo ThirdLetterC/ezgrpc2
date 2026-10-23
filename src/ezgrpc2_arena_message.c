@@ -32,7 +32,8 @@ EZGRPC2_API void ezgrpc2_arena_message_free(ezgrpc2_arena_message *arena_message
 }
 
 /* appends to the last element */
-EZGRPC2_API ezgrpc2_message *ezgrpc2_arena_message_malloc(ezgrpc2_arena_message *arena_message, size_t size) {
+EZGRPC2_API ezgrpc2_message *ezgrpc2_arena_message_malloc(ezgrpc2_arena_message *arena_message,
+                                                          size_t size) {
   assert(arena_message != nullptr);
 
   /* ensure the memory we're returning is aligned */

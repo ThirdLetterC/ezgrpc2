@@ -13,7 +13,8 @@ struct thpool;
 
 thpool *thpool_new(int workers, int flags);
 int thpool_init(thpool *pool, int workers, int flags);
-int thpool_add_task(thpool *pool, void (*func)(void*), void *userdata, void (*userdata_cleanup)(void*));
+int thpool_add_task(thpool *pool, void (*func)(void *), void *userdata,
+                    void (*userdata_cleanup)(void *));
 void thpool_cleanup(thpool *pool);
 void thpool_free(thpool *pool);
 int thpool_is_empty(thpool *pool);

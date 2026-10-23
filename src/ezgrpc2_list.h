@@ -3,9 +3,8 @@
 #include <stdlib.h>
 #include "defs.h"
 
-
 /**
- * An opaque list context. 
+ * An opaque list context.
  *
  */
 typedef struct ezgrpc2_list ezgrpc2_list;
@@ -17,7 +16,6 @@ typedef struct ezgrpc2_list ezgrpc2_list;
 ezgrpc2_list *ezgrpc2_list_new(void *unused);
 
 void ezgrpc2_list_free(ezgrpc2_list *list);
-
 
 /**
  *   Counts the number of elements at the address pointed by the parameter ``list``
@@ -73,7 +71,6 @@ void *ezgrpc2_list_pop_back(ezgrpc2_list *list);
 void *ezgrpc2_list_peek_front(ezgrpc2_list *list);
 void *ezgrpc2_list_peek_back(ezgrpc2_list *list);
 
-
 /**
  * Appends the list ``src`` to the list ``dst``.
  *
@@ -81,7 +78,6 @@ void *ezgrpc2_list_peek_back(ezgrpc2_list *list);
  * :param src: The source list
  */
 void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list *dst, ezgrpc2_list *src);
-
 
 /**
  * The :c:func:`ezgrpc2_list_find()` function finds and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
@@ -102,24 +98,25 @@ void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list *dst, ezgrpc2_list *src);
  * .. code-block:: C
  *
  *    #include "list.h"
- *    
+ *
  *    int cmp(void *data, void *cmpdata) {
  *      return data == userdata;
  *    }
- *    
+ *
  *    int main() {
  *      ezgrpc2_list l;
  *      ezgrpc2_list_init(&l);
  *      ezgrpc2_list_push_front(&l, (void*)0x1);
  *      ezgrpc2_list_push_front(&l, (void*)0x4);
  *      ezgrpc2_list_push_front(&l, (void*)0x11);
- *    
+ *
  *      ezgrpc2_list_find(&l, cmp, (void*)4); // returns 4
  *      ezgrpc2_list_find(&l, cmp, (void*)13); // returns NULL
  *      return 0;
  *    }
  */
-void *ezgrpc2_list_find(ezgrpc2_list *list, int (*cmp)(const void *data, const void *userdata), void *userdata);
+void *ezgrpc2_list_find(ezgrpc2_list *list, int (*cmp)(const void *data, const void *userdata),
+                        void *userdata);
 
 /**
  * The :c:func:`ezgrpc2_list_remove()` function removes and returns the user defined ``userdata`` when ``cmp(userdata, cmpdata)``
@@ -141,24 +138,25 @@ void *ezgrpc2_list_find(ezgrpc2_list *list, int (*cmp)(const void *data, const v
  * .. code-block:: C
  *
  *    #include "list.h"
- *    
+ *
  *    int cmp(void *data, void *cmpdata) {
  *      return data == userdata;
  *    }
- *    
+ *
  *    int main() {
  *      ezgrpc2_list l;
  *      ezgrpc2_list_init(&l);
  *      ezgrpc2_list_push_front(&l, (void*)0x1);
  *      ezgrpc2_list_push_front(&l, (void*)0x4);
  *      ezgrpc2_list_push_front(&l, (void*)0x11);
- *    
+ *
  *      ezgrpc2_list_remove(&l, cmp, (void*)4); // returns 4
  *      ezgrpc2_list_remove(&l, cmp, (void*)13); // returns NULL
  *      return 0;
  *    }
  */
-void *ezgrpc2_list_remove(ezgrpc2_list *list, int (*cmp)(const void *data, const void *userdata), void *userdata);
+void *ezgrpc2_list_remove(ezgrpc2_list *list, int (*cmp)(const void *data, const void *userdata),
+                          void *userdata);
 
 /**
  * Checks if the list is empty.
@@ -169,6 +167,6 @@ void *ezgrpc2_list_remove(ezgrpc2_list *list, int (*cmp)(const void *data, const
  */
 int ezgrpc2_list_is_empty(ezgrpc2_list *list);
 
-
-void ezgrpc2_list_foreach(ezgrpc2_list *list, void (*func)(const void *data, const void *userdata), void *userdata);
+void ezgrpc2_list_foreach(ezgrpc2_list *list, void (*func)(const void *data, const void *userdata),
+                          void *userdata);
 #endif

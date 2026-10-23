@@ -22,7 +22,8 @@ void test_health_status_get_set(void) {
   ezgrpc2_health_set_status("order.OrderService", EZGRPC2_HEALTH_NOT_SERVING);
 
   TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_SERVING, ezgrpc2_health_get_status("helloworld.Greeter"));
-  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_NOT_SERVING, ezgrpc2_health_get_status("order.OrderService"));
+  TEST_ASSERT_EQUAL_INT(EZGRPC2_HEALTH_NOT_SERVING,
+                        ezgrpc2_health_get_status("order.OrderService"));
 
   // Reset overall status
   ezgrpc2_health_set_status("", EZGRPC2_HEALTH_SERVING);

@@ -16,38 +16,15 @@
 #include "thpool.h"
 #include "thpool_struct.h"
 
-#ifdef _WIN32
-#  include <winsock2.h>
-#  include <ws2tcpip.h>
-#  include <windows.h>
-#  include <Rpc.h>
-
-#  define ssize_t int
-#  define SHUT_RDWR SD_BOTH
-
-/* winsock send/recv returns int instead of ssize_t */
-#define EZSSIZE           int
-#define EZSOCKET          SOCKET
-#define EZINVALID_SOCKET  INVALID_SOCKET
-#define EZSOCKET_ERROR    SOCKET_ERROR
-#define EZSOCKLEN         int
-#else
-#  include <uuid/uuid.h>
-#  include <arpa/inet.h>
-#  include <byteswap.h>
-#  include <fcntl.h>
-#  include <netdb.h>
-#  include <netinet/in.h>
-#  include <netinet/tcp.h>
-#  include <sys/socket.h>
-#  include <sys/types.h>
-
-#define EZSSIZE           ssize_t
-#define EZSOCKET          int
-#define EZINVALID_SOCKET  (-1)
-#define EZSOCKET_ERROR    (-1)
-#define EZSOCKLEN         socklen_t
-#endif /* _WIN32/elae */
+#include <uuid/uuid.h>
+#include <arpa/inet.h>
+#include <byteswap.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #include "ansicolors.h"
 #include "common.h"
@@ -57,11 +34,9 @@
 #include "ezgrpc2_session_uuid_struct.h"
 #include "ezgrpc2_list_struct.h"
 
-
-
 /* stores the values of a SETTINGS frame */
-//typedef struct ezgrpc_settingsf_t ezgrpc_settingsf_t;
-//struct ezgrpc_settingsf_t {
+// typedef struct ezgrpc_settingsf_t ezgrpc_settingsf_t;
+// struct ezgrpc_settingsf_t {
 //  u32 header_table_size;
 //  u32 enable_push;
 //  u32 max_concurrent_streams;
@@ -69,7 +44,6 @@
 //  u32 max_frame_size;
 //};
 //
-
 
 /* a growable byte buffer */
 typedef struct ezgrpc2_buf ezgrpc2_buf;
@@ -116,7 +90,6 @@ struct ezgrpc2_stream {
   const char *hgrpc_accept_encoding;
   const char *hgrpc_timeout;
 
-
   /* stores `:path` */
   ezgrpc2_path *path;
 
@@ -142,16 +115,10 @@ typedef struct ezgrpc2_session ezgrpc2_session;
 struct ezgrpc2_session {
   nghttp2_session *ngsession;
   ezgrpc2_session_uuid session_uuid;
-#ifdef _WIN32
-  SOCKET sockfd;
-  int socklen;
-#else
   int sockfd;
   socklen_t socklen;
-#endif
   /* parent server context */
   ezgrpc2_server *server;
-
 
   struct sockaddr_storage sockaddr;
 
@@ -214,8 +181,8 @@ struct ezgrpc2_server {
   char *ipv4_addr;
   char *ipv6_addr;
 
-  EZSOCKET ipv4_sockfd;
-  EZSOCKET ipv6_sockfd;
+  int ipv4_sockfd;
+  int ipv6_sockfd;
 
   uv_loop_t loop;
   uv_tcp_t ipv4_listener;

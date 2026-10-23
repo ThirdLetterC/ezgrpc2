@@ -16,11 +16,7 @@ tests = tests/test_listc.bin
 tests += tests/test_pthpoolc.bin
 tests += tests/test_ezgrpc2c.bin
 
-ifeq ($(OS),Windows_NT)
-  targets = libezgrpc2.dll
-else
-  targets = libezgrpc2.so
-endif
+targets = libezgrpc2.so
 targets += libezgrpc2.a
 
 objects = thpool.o
@@ -64,9 +60,6 @@ libezgrpc2.a : $(objects)
 
 libezgrpc2.so : $(objects)
 	$(Q)$(CC) -shared $(LDFLAGS) $^ -lnghttp2 -lz -luv -o $@
-
-libezgrpc2.dll : $(objects)
-	$(Q)$(CC) -shared $(CFLAGS) $^ -lnghttp2 -lwinpthread -lRpcrt4 -lWs2_32 -luv -o $@
 
 # -MMD: rebuild objects when a header (e.g. the structs in core.h) changes
 %.o : %.c

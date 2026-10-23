@@ -10,14 +10,7 @@ void tearDown(void) {}
 
 void test_metadata_base64_roundtrip(void) {
   const char *test_strings[] = {
-      "",
-      "f",
-      "fo",
-      "foo",
-      "foob",
-      "fooba",
-      "foobar",
-      "Hello, gRPC Binary Metadata World!",
+      "", "f", "fo", "foo", "foob", "fooba", "foobar", "Hello, gRPC Binary Metadata World!",
   };
 
   for (size_t i = 0; i < sizeof(test_strings) / sizeof(test_strings[0]); i++) {
@@ -67,7 +60,8 @@ void test_metadata_null_handling(void) {
   TEST_ASSERT_NULL(ezgrpc2_metadata_decode_bin(nullptr, 10, nullptr));
   TEST_ASSERT_NULL(ezgrpc2_metadata_get(nullptr, (ezgrpc2_session_uuid){0}, 1, "test", nullptr));
   TEST_ASSERT_EQUAL_UINT64(0, ezgrpc2_metadata_count(nullptr, (ezgrpc2_session_uuid){0}, 1));
-  TEST_ASSERT_EQUAL_INT(1, ezgrpc2_metadata_get_at(nullptr, (ezgrpc2_session_uuid){0}, 1, 0, nullptr));
+  TEST_ASSERT_EQUAL_INT(1,
+                        ezgrpc2_metadata_get_at(nullptr, (ezgrpc2_session_uuid){0}, 1, 0, nullptr));
 }
 
 int main(void) {

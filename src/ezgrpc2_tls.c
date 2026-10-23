@@ -11,17 +11,13 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
-static int alpn_select_cb(
-  [[maybe_unused]] SSL *ssl,
-  const unsigned char **out,
-  unsigned char *outlen,
-  const unsigned char *in,
-  unsigned int inlen,
-  [[maybe_unused]] void *arg) {
+static int alpn_select_cb([[maybe_unused]] SSL *ssl, const unsigned char **out,
+                          unsigned char *outlen, const unsigned char *in, unsigned int inlen,
+                          [[maybe_unused]] void *arg) {
   // HTTP/2 ALPN token is "\x02h2"
   static const unsigned char h2_proto[] = "\x02h2";
-  if (SSL_select_next_proto((unsigned char **)out, outlen,
-                            h2_proto, sizeof(h2_proto) - 1, in, inlen) != OPENSSL_NPN_NEGOTIATED) {
+  if (SSL_select_next_proto((unsigned char **)out, outlen, h2_proto, sizeof(h2_proto) - 1, in,
+                            inlen) != OPENSSL_NPN_NEGOTIATED) {
     return SSL_TLSEXT_ERR_NOACK;
   }
   return SSL_TLSEXT_ERR_OK;
@@ -72,10 +68,8 @@ EZGRPC2_API void ezgrpc2_tls_free_server_ctx(SSL_CTX *ctx) {
   }
 }
 
-EZGRPC2_API int ezgrpc2_server_enable_tls(
-  ezgrpc2_server *server,
-  const char *cert_file,
-  const char *key_file) {
+EZGRPC2_API int ezgrpc2_server_enable_tls(ezgrpc2_server *server, const char *cert_file,
+                                          const char *key_file) {
   if (server == nullptr || cert_file == nullptr || key_file == nullptr) {
     return 1;
   }
@@ -95,7 +89,8 @@ EZGRPC2_API int ezgrpc2_server_enable_tls(
 }
 
 int ezgrpc2_tls_session_init(ezgrpc2_session *session) {
-  if (session == nullptr || session->server == nullptr || !session->server->is_tls || session->server->ssl_ctx == nullptr) {
+  if (session == nullptr || session->server == nullptr || !session->server->is_tls ||
+      session->server->ssl_ctx == nullptr) {
     return 0;
   }
 
@@ -239,13 +234,16 @@ void ezgrpc2_tls_session_free(ezgrpc2_session *session) {
 
 #else
 
-EZGRPC2_API SSL_CTX *ezgrpc2_tls_init_server_ctx([[maybe_unused]] const char *cert_file, [[maybe_unused]] const char *key_file) {
+EZGRPC2_API SSL_CTX *ezgrpc2_tls_init_server_ctx([[maybe_unused]] const char *cert_file,
+                                                 [[maybe_unused]] const char *key_file) {
   return nullptr;
 }
 
 EZGRPC2_API void ezgrpc2_tls_free_server_ctx([[maybe_unused]] SSL_CTX *ctx) {}
 
-EZGRPC2_API int ezgrpc2_server_enable_tls([[maybe_unused]] ezgrpc2_server *server, [[maybe_unused]] const char *cert_file, [[maybe_unused]] const char *key_file) {
+EZGRPC2_API int ezgrpc2_server_enable_tls([[maybe_unused]] ezgrpc2_server *server,
+                                          [[maybe_unused]] const char *cert_file,
+                                          [[maybe_unused]] const char *key_file) {
   return -1;
 }
 
@@ -253,11 +251,13 @@ int ezgrpc2_tls_session_init([[maybe_unused]] ezgrpc2_session *session) {
   return 0;
 }
 
-int ezgrpc2_tls_feed([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] const void *buf, [[maybe_unused]] size_t len) {
+int ezgrpc2_tls_feed([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] const void *buf,
+                     [[maybe_unused]] size_t len) {
   return 1;
 }
 
-int ezgrpc2_tls_drain([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] ezgrpc2_buf *out) {
+int ezgrpc2_tls_drain([[maybe_unused]] ezgrpc2_session *session,
+                      [[maybe_unused]] ezgrpc2_buf *out) {
   return 1;
 }
 
@@ -265,11 +265,13 @@ int ezgrpc2_tls_handshake([[maybe_unused]] ezgrpc2_session *session) {
   return 1;
 }
 
-ssize_t ezgrpc2_tls_read([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] void *buf, [[maybe_unused]] size_t len) {
+ssize_t ezgrpc2_tls_read([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] void *buf,
+                         [[maybe_unused]] size_t len) {
   return -1;
 }
 
-ssize_t ezgrpc2_tls_write([[maybe_unused]] ezgrpc2_session *session, [[maybe_unused]] const void *buf, [[maybe_unused]] size_t len) {
+ssize_t ezgrpc2_tls_write([[maybe_unused]] ezgrpc2_session *session,
+                          [[maybe_unused]] const void *buf, [[maybe_unused]] size_t len) {
   return -1;
 }
 
@@ -279,19 +281,14 @@ void ezgrpc2_tls_session_free([[maybe_unused]] ezgrpc2_session *session) {}
 
 #endif
 
-EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new_tls(
-  const char *ipv4_addr,
-  uint16_t ipv4_port,
-  const char *ipv6_addr,
-  uint16_t ipv6_port,
-  int backlog,
-  const char *cert_file,
-  const char *key_file,
-  ezgrpc2_server_settings *server_settings,
-  ezgrpc2_http2_settings *http2_settings) {
-  ezgrpc2_server *server = ezgrpc2_server_new(
-    ipv4_addr, ipv4_port, ipv6_addr, ipv6_port, backlog,
-    server_settings, http2_settings);
+EZGRPC2_API ezgrpc2_server *ezgrpc2_server_new_tls(const char *ipv4_addr, uint16_t ipv4_port,
+                                                   const char *ipv6_addr, uint16_t ipv6_port,
+                                                   int backlog, const char *cert_file,
+                                                   const char *key_file,
+                                                   ezgrpc2_server_settings *server_settings,
+                                                   ezgrpc2_http2_settings *http2_settings) {
+  ezgrpc2_server *server = ezgrpc2_server_new(ipv4_addr, ipv4_port, ipv6_addr, ipv6_port, backlog,
+                                              server_settings, http2_settings);
   if (server == nullptr) {
     return nullptr;
   }

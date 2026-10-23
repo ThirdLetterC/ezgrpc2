@@ -48,7 +48,7 @@ EZGRPC2_API int ezgrpc2_list_push_back(ezgrpc2_list *ezlist, void *data) {
 
   ezlist->count++;
 
-  return 0; 
+  return 0;
 }
 
 /* inserts to the first element */
@@ -62,7 +62,7 @@ EZGRPC2_API int ezgrpc2_list_push_front(ezgrpc2_list *ezlist, void *data) {
   new_node->prev = nullptr;
   if (ezlist->front != nullptr)
     ezlist->front->prev = new_node;
-  else 
+  else
     ezlist->back = new_node;
   ezlist->front = new_node;
 
@@ -122,7 +122,9 @@ EZGRPC2_API int ezgrpc2_list_is_empty(ezgrpc2_list *ezlist) {
   return !ezlist->count;
 }
 
-EZGRPC2_API void *ezgrpc2_list_find(ezgrpc2_list *ezlist, int (*cmp)(const void *data, const void *userdata), void *userdata) {
+EZGRPC2_API void *ezgrpc2_list_find(ezgrpc2_list *ezlist,
+                                    int (*cmp)(const void *data, const void *userdata),
+                                    void *userdata) {
   eznode_t *node = ezlist->front;
   while (node != nullptr && cmp(node->data, userdata)) {
     node = node->next;
@@ -132,7 +134,9 @@ EZGRPC2_API void *ezgrpc2_list_find(ezgrpc2_list *ezlist, int (*cmp)(const void 
 }
 
 /* remove */
-EZGRPC2_API void *ezgrpc2_list_remove(ezgrpc2_list *ezlist, int (*cmp)(const void *data, const void *userdata), void *userdata) {
+EZGRPC2_API void *ezgrpc2_list_remove(ezgrpc2_list *ezlist,
+                                      int (*cmp)(const void *data, const void *userdata),
+                                      void *userdata) {
   eznode_t *node = ezlist->front;
   void *data = nullptr;
   while (node != nullptr && cmp(node->data, userdata)) {
@@ -161,12 +165,12 @@ EZGRPC2_API void *ezgrpc2_list_remove(ezgrpc2_list *ezlist, int (*cmp)(const voi
 
 EZGRPC2_API void *ezgrpc2_list_peek_front(ezgrpc2_list *ezlist) {
   assert(ezlist != nullptr);
-  return ezlist->front != nullptr ? ezlist->front->data: nullptr;
+  return ezlist->front != nullptr ? ezlist->front->data : nullptr;
 }
 
 EZGRPC2_API void *ezgrpc2_list_peek_back(ezgrpc2_list *ezlist) {
   assert(ezlist != nullptr);
-  return ezlist->back != nullptr ? ezlist->back->data: nullptr;
+  return ezlist->back != nullptr ? ezlist->back->data : nullptr;
 }
 
 EZGRPC2_API void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list *dst, ezgrpc2_list *src) {
@@ -190,7 +194,9 @@ EZGRPC2_API void ezgrpc2_list_concat_and_empty_src(ezgrpc2_list *dst, ezgrpc2_li
   src->count = 0;
 }
 
-EZGRPC2_API void ezgrpc2_list_foreach(ezgrpc2_list *ezlist, void (*func)(const void *data, const void *userdata), void *userdata) {
+EZGRPC2_API void ezgrpc2_list_foreach(ezgrpc2_list *ezlist,
+                                      void (*func)(const void *data, const void *userdata),
+                                      void *userdata) {
   for (eznode_t *n = ezlist->front; n != nullptr; n = n->next)
     func(n->data, userdata);
 }

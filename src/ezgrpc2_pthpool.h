@@ -104,7 +104,7 @@ ezgrpc2_pthpool *ezgrpc2_pthpool_new(int workers, int flags);
  * Example 2:
  *
  * .. code-block:: C
- 
+
  *    #include <stdlib.h>
  *    #include <unistd.h>
  *    #include "pthpool.h"
@@ -127,7 +127,7 @@ ezgrpc2_pthpool *ezgrpc2_pthpool_new(int workers, int flags);
  *      ezgrpc2_pthpool_free(pool);
  *    }
  *
- * Result 2: :: 
+ * Result 2: ::
  *
  *    called userdata_cleanup
  *    called ret_cleanup
@@ -139,18 +139,21 @@ ezgrpc2_pthpool *ezgrpc2_pthpool_new(int workers, int flags);
  *    called ret_cleanup
  *    called userdata_cleanup
  *    called ret_cleanup
- *     
+ *
  */
-int ezgrpc2_pthpool_add_task(ezgrpc2_pthpool *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*));
+int ezgrpc2_pthpool_add_task(ezgrpc2_pthpool *pool, void *(*func)(void *), void *userdata,
+                             void (*ret_cleanup)(void *), void (*userdata_cleanup)(void *));
 
-int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool *pool, void *(*func)(void*), void *userdata, void (*ret_cleanup)(void *), void (*userdata_cleanup)(void*), time_t timeout);
+int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool *pool, void *(*func)(void *), void *userdata,
+                              void (*ret_cleanup)(void *), void (*userdata_cleanup)(void *),
+                              time_t timeout);
 
 /**
  * Destroys the thread pool.
  *
  * :param pool: The thread pool.
  *
- * If there's unexecuted tasks left in the pool, it is popped and the 
+ * If there's unexecuted tasks left in the pool, it is popped and the
  * registered ``userdata_cleanup``, if setted, is called.
  *
  * If there's executed tasks left in pool, not popped via, :c:func:`ezgrpc2_pthpool_poll()`,
@@ -159,7 +162,6 @@ int ezgrpc2_pthpool_add_task2(ezgrpc2_pthpool *pool, void *(*func)(void*), void 
  *
  */
 void ezgrpc2_pthpool_free(ezgrpc2_pthpool *pool);
-
 
 /**
  * Polls for finished tasks in the thread pool amd appends it to ``ezgrpc2_list_results``.
@@ -203,7 +205,7 @@ void ezgrpc2_pthpool_free(ezgrpc2_pthpool *pool);
  *      ezgrpc2_pthpool_free(pool);
  *    }
  *
- * Result 1: :: 
+ * Result 1: ::
  *
  *    userdata = 0x32
  *    ret = 0x33
@@ -211,7 +213,6 @@ void ezgrpc2_pthpool_free(ezgrpc2_pthpool *pool);
  *    ret = 0x193
  */
 void ezgrpc2_pthpool_poll(ezgrpc2_pthpool *pool, ezgrpc2_list *ezgrpc2_list_results);
-
 
 /**
  * Checks if there are tasks running in the pool.
@@ -224,7 +225,6 @@ void ezgrpc2_pthpool_poll(ezgrpc2_pthpool *pool, ezgrpc2_list *ezgrpc2_list_resu
 int ezgrpc2_pthpool_is_empty(ezgrpc2_pthpool *pool);
 
 void ezgrpc2_pthpool_stop_and_join(ezgrpc2_pthpool *pool);
-
 
 void ezgrpc2_pthpool_result_free(ezgrpc2_pthpool_result_t *result);
 #endif

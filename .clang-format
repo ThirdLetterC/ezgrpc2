@@ -1,0 +1,37 @@
+# Formatting for the ezgrpc2 C sources. Run `make format` (or `make format-check`).
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: Latest
+
+IndentWidth: 2
+ContinuationIndentWidth: 4
+ColumnLimit: 100
+UseTab: Never
+PointerAlignment: Right
+BreakBeforeBraces: Attach
+IndentCaseLabels: false
+IndentPPDirectives: None
+
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: Left
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+
+MaxEmptyLinesToKeep: 1
+InsertNewlineAtEOF: true
+KeepEmptyLines:
+  AtStartOfBlock: false
+
+# ezgrpc2_mem.h overrides malloc() and friends with macros, so the
+# order of includes is significant and must not be changed.
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+# keep hand-formatted comment blocks (ASCII boxes, aligned docs) intact
+ReflowComments: IndentOnly

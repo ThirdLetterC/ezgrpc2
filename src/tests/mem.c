@@ -6,11 +6,9 @@
 #include "ezgrpc2_mem.h"
 #include "unity.h"
 
-void setUp(void) {
-}
+void setUp(void) {}
 
-void tearDown(void) {
-}
+void tearDown(void) {}
 
 void test_allocator_name(void) {
   const char *name = ezgrpc2_get_allocator_name();
@@ -91,8 +89,8 @@ void test_custom_allocator_switch(void) {
   TEST_ASSERT_NOT_NULL(orig);
 
   ezgrpc2_allocator mock_alloc = {
-    .malloc = mock_malloc,
-    .free = mock_free,
+      .malloc = mock_malloc,
+      .free = mock_free,
   };
 
   ezgrpc2_set_allocator(&mock_alloc);

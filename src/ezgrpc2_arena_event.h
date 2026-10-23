@@ -12,7 +12,6 @@ EZGRPC2_API void ezgrpc2_arena_event_free(ezgrpc2_arena_event *arena_event);
 /* appends to the last element */
 EZGRPC2_API ezgrpc2_event *ezgrpc2_arena_event_malloc(ezgrpc2_arena_event *arena_event);
 
-
 EZGRPC2_API ezgrpc2_event *ezgrpc2_arena_event_read(ezgrpc2_arena_event *arena_event);
 
 EZGRPC2_API int ezgrpc2_arena_event_is_empty(ezgrpc2_arena_event *arena_event);

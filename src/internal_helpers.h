@@ -5,14 +5,11 @@
 #include <string.h>
 #include "core.h"
 
-#ifdef _WIN32
-int makenonblock(SOCKET sockfd);
-#else
 int makenonblock(int sockfd);
-#endif
 
 void session_close(ezgrpc2_session *session);
-ezgrpc2_session *session_find(ezgrpc2_session *ezsessions, size_t nb_ezsessions, ezgrpc2_session_uuid session_uuid);
+ezgrpc2_session *session_find(ezgrpc2_session *ezsessions, size_t nb_ezsessions,
+                              ezgrpc2_session_uuid session_uuid);
 
 /* queues the session to have its pending nghttp2 output written on the next poll */
 void session_schedule_flush(ezgrpc2_session *session);
