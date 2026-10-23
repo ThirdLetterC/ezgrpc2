@@ -3,258 +3,310 @@
 > [!NOTE]
 > This repository is under active development; we’re tightening the bolts and refueling the engine! The hangar doors are wide open: you are encouraged to kick the tires, poke the wires, and take it for a spin in your local environment. If you manage to break the sound barrier (or find a bug), please let us know.
 
-**EZgRPC2** is an ultra-lightweight, high-performance gRPC server implementation in C (C23 standard). Designed around a non-blocking `poll(2)` event loop, it provides fine-grained control over streams, events, concurrency, and memory without the heavyweight overhead of traditional gRPC runtimes.
+**EZgRPC2** is a lightweight, high-performance gRPC server library in C23 for Linux. It is built on [libuv](https://libuv.org/) and [nghttp2](https://nghttp2.org/), and exposes a simple poll-and-handle API: no hidden threads, no code generator, no callback soup. You decide how requests are scheduled, how memory is allocated, and how many cores to use.
 
 ---
 
 ## Features
 
-- **Event-Driven Architecture**: Clean, non-blocking `poll(2)` event model for incoming gRPC messages, connection lifecycles, timeouts, and stream resets.
-- **TLS / SSL & ALPN**: Secure HTTP/2 communication powered by OpenSSL with native ALPN (`h2`) protocol negotiation.
-- **All 4 RPC Streaming Modes**:
-  - **Unary**: Standard request-response.
-  - **Server Streaming**: Server sends multiple messages on a single stream.
-  - **Client Streaming**: Client streams multiple messages to the server.
-  - **Bidirectional Streaming**: Full-duplex concurrent streaming between client and server.
-- **Protobuf-C Integration**: Optional first-class support for [`protobuf-c`](https://github.com/protobuf-c/protobuf-c) messages (`EZGRPC2_PB_UNPACK`, `ezgrpc2_pb_create_response`).
-- **Interceptors / Middleware Pipeline**: Pre-call and post-call hooks for logging, tracing, metrics, and built-in Bearer authentication tokens (`ezgrpc2_interceptor_create_bearer_auth`).
-- **Standard gRPC Health Checking Protocol**: Built-in support for `/grpc.health.v1.Health/Check` and status management.
-- **Standard gRPC Server Reflection Protocol**: Built-in discovery support for `/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo`.
-- **Custom Metadata & Binary Headers**: RFC 4648 Base64 encoding/decoding for `*-bin` trailing and initial metadata.
-- **Deadlines & Timeouts**: Automatic parsing of `grpc-timeout` headers and event dispatching (`EZGRPC2_EVENT_TIMEOUT`).
-- **Transparent Compression**: RFC 1952 Gzip compression and decompression powered by `zlib`.
-- **Rich Error Model**: Serializes `google.rpc.Status` with `Any` details (e.g., `ErrorInfo`) into `grpc-status-details-bin` trailing metadata.
-- **Pluggable Memory Allocators**: Zero-overhead support for standard libc `malloc`, Microsoft `mimalloc`, `jemalloc`, and custom runtime allocators.
+- **Poll-based API**: one call (`ezgrpc2_server_poll()`) runs the event loop and returns a batch of events (connections, messages, cancellations, deadlines) for you to handle.
+- **All 4 RPC modes**: unary, server streaming, client streaming and bidirectional streaming.
+- **TLS with ALPN**: HTTP/2 over TLS 1.2+ (OpenSSL), negotiating `h2`.
+- **Protobuf-C helpers**: optional [`protobuf-c`](https://github.com/protobuf-c/protobuf-c) integration (`EZGRPC2_PB_UNPACK`, `ezgrpc2_pb_create_response`).
+- **Interceptors**: pre-call hooks run with `ezgrpc2_server_intercept_pre()`, post-call hooks with `ezgrpc2_server_intercept_post()`. A built-in Bearer token interceptor is available (`ezgrpc2_interceptor_create_bearer_auth`).
+- **Health checking**: the standard `/grpc.health.v1.Health/Check` service with per-service status.
+- **Server reflection**: `grpc.reflection.v1` and `v1alpha` `ServerReflectionInfo`.
+- **Metadata**: read request headers, send initial metadata and trailers, and Base64 `*-bin` values.
+- **Deadlines**: `grpc-timeout` is parsed. Expired streams are ended with `DEADLINE_EXCEEDED` and reported as `EZGRPC2_EVENT_TIMEOUT`.
+- **Gzip compression**: zlib-backed compression and decompression of messages.
+- **Rich error model**: `google.rpc.Status` with `Any` details (e.g. `ErrorInfo`) sent in `grpc-status-details-bin`.
+- **Pluggable allocators**: libc `malloc`, `mimalloc`, `jemalloc`, or your own allocator set at runtime.
 
 ---
 
 ## Architecture
 
-The server architecture is inspired by `poll(2)`. Instead of hidden threads or opaque callback soup, you register service paths and poll an event queue:
+You register service paths, then poll for events and answer them:
 
 ```c
 struct ezgrpc2_event {
   union {
     ezgrpc2_event_message  message;   // Received gRPC messages on a stream
-    ezgrpc2_event_dataloss dataloss;  // Frame decoding or stream error
-    ezgrpc2_event_cancel   cancel;    // Stream cancelled (RST_STREAM)
+    ezgrpc2_event_dataloss dataloss;  // Truncated message at end of stream
+    ezgrpc2_event_cancel   cancel;    // Stream cancelled by the client (RST_STREAM)
     ezgrpc2_event_timeout  timeout;   // Stream deadline exceeded
   };
-  ezgrpc2_event_type type;            // EVENT_CONNECT, DISCONNECT, MESSAGE, etc.
-  ezgrpc2_session_uuid session_uuid;  // 128-bit session identifier
-  void *userdata;                     // Per-service handler callback / context
+  ezgrpc2_event_type type;            // EZGRPC2_EVENT_CONNECT, _DISCONNECT, _MESSAGE, ...
+  ezgrpc2_session_uuid session_uuid;  // Identifies the client connection
+  void *userdata;                     // The pointer you registered with the path
 };
 ```
 
-### I/O model and performance
+### I/O model
 
 Each `ezgrpc2_server` owns one libuv loop, driven by `ezgrpc2_server_poll()`:
 
-- Connections are `uv_tcp_t` streams. Reads land in a shared buffer and go straight to `nghttp2_session_mem_recv()`.
-- `ezgrpc2_server_session_stream_send()`, `..._stream_end()` and similar calls only **queue** frames. At the start of the next `ezgrpc2_server_poll()`, everything queued for a connection (HEADERS, DATA and trailers of every stream) is written with a single write. Call `ezgrpc2_server_flush()` if your next poll may be delayed.
-- TLS uses memory BIOs, so a batch is encrypted with one `SSL_write()`.
+- Connections are libuv TCP streams (`uv_tcp_t`). Received bytes go straight from a shared read buffer into nghttp2.
+- `ezgrpc2_server_session_stream_send()`, `..._stream_end()` and similar calls only **queue** frames. At the start of the next `ezgrpc2_server_poll()`, everything queued for a connection (headers, data and trailers of all its streams) is written with a single write. If your next poll may be delayed, call `ezgrpc2_server_flush()`.
+- TLS runs over memory BIOs, so each batch is encrypted with a single `SSL_write()`.
 
-A libuv loop runs on one thread. To use more cores, run one server per thread on the same port. The listening sockets use `SO_REUSEPORT`, so the kernel spreads connections across the loops (see `THREADS=N` in `examples/python_client_c_server/server.c`). Note that a single HTTP/2 connection always stays on one loop. Load generators such as `ghz` open only one connection by default, so pass `--connections=N` to measure more than one loop.
+### Using more cores
+
+A libuv loop runs on one thread. To use more cores, create one server per thread on the same port. The listening sockets use `SO_REUSEPORT`, so the kernel spreads incoming connections across the loops. Health and reflection state is shared and thread-safe. The example server does this when started with `THREADS=N`.
+
+A single HTTP/2 connection always stays on one loop, so multiple loops only help when clients open multiple connections.
+
+### Performance
+
+Measured on localhost with `h2load` sending unary `SayHello` calls to the example server built with `MIMALLOC=1`:
+
+| Setup | Requests/s |
+|:---|---:|
+| 1 loop, 16 connections × 32 concurrent streams | ~490k |
+| 1 loop, 100 connections × 1 stream | ~147k |
+| 8 loops, 64 connections × 32 concurrent streams | ~1.8M |
+
+Numbers depend on hardware and on the client. A single `ghz` process with its default one connection tops out well below what one loop can serve, so pass `--connections=N` to `ghz` or use `h2load`.
 
 ---
 
 ## Requirements & Dependencies
 
-- **Compiler**: GCC 11+ or Clang 14+ with C23 (`-std=c2x` / `-std=c23`) support.
-- **Core Dependencies**:
-  - `libnghttp2` (HTTP/2 framing)
-  - `pthread` (POSIX threading)
-  - `libuuid` (Linux session UUIDs)
-- **Optional Feature Dependencies**:
-  - `OpenSSL` (`libssl`, `libcrypto`) - for TLS / SSL encryption (auto-detected)
-  - `zlib` - for Gzip message compression (auto-detected)
-  - `protobuf-c` - for Protobuf-C message helpers (auto-detected)
-  - `mimalloc` / `jemalloc` - high-performance alternative allocators
+- **Platform**: Linux.
+- **Compiler**: GCC 11+ or Clang 14+ with C23 support (`-std=c23`, or `-std=c2x` on older compilers).
+- **Required libraries**:
+  - `libuv` (event loop)
+  - `libnghttp2` (HTTP/2)
+  - `libuuid` (session identifiers)
+  - `pthread`
+- **Optional libraries** (detected automatically when installed):
+  - OpenSSL (`libssl`, `libcrypto`) for TLS
+  - `zlib` for Gzip compression
+  - `protobuf-c` for the Protobuf-C helpers
+  - `mimalloc` or `jemalloc` as the allocator (selected at build time)
 
 On Debian / Ubuntu:
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
-  build-essential pkg-config libnghttp2-dev \
-  zlib1g-dev libssl-dev uuid-dev \
-  libprotobuf-c-dev protobuf-c-compiler
+  build-essential pkg-config libuv1-dev libnghttp2-dev uuid-dev \
+  zlib1g-dev libssl-dev libprotobuf-c-dev protobuf-c-compiler \
+  libmimalloc-dev libjemalloc-dev   # optional allocators
 ```
+
+The Python integration tests also need `grpcio`, `grpcio-tools` and `protobuf` (`pip install grpcio grpcio-tools protobuf`).
 
 ---
 
 ## Building
 
-Build the static library (`libezgrpc2.a`), shared library (`libezgrpc2.so`), and example servers:
+Build the static library (`src/libezgrpc2.a`), the shared library (`src/libezgrpc2.so`) and the examples:
+
 ```bash
 make
 ```
 
-### Build Options
+### Build options
 
-| Make Flag | Description |
+| Command | Description |
 |:---|:---|
-| `make test` | Builds and runs all unit tests and integration tests |
-| `make D=1` | Enables `-ggdb3` debug symbols and debug logging |
-| `make T=1` | Enables trace-level HTTP/2 frame logging |
-| `make MIMALLOC=1` | Links with Microsoft `mimalloc` |
-| `make JEMALLOC=1` | Links with `jemalloc` |
-| `make ASAN=1` | Builds with AddressSanitizer (leak and memory check) |
+| `make test` | Builds and runs the unit tests and the Python integration tests (cleartext and TLS) |
+| `make MIMALLOC=1` | Uses `mimalloc` |
+| `make JEMALLOC=1` | Uses `jemalloc` |
+| `make ALLOCATOR=custom` | Allocator set at runtime with `ezgrpc2_set_allocator()` |
+| `make PROTOBUF_C=0` | Disables the Protobuf-C helpers (enabled when `protobuf-c` is found) |
+| `make D=1` | Debug build: `-ggdb3`, no optimization, debug logging |
+| `make T=1` | Trace logging of every HTTP/2 frame (slow) |
+| `make ASAN=1` | AddressSanitizer build |
+| `make format` | Formats the C sources with `clang-format` |
+| `make format-check` | Fails if any C source is not formatted |
+| `make clean` | Removes build output |
 
 ---
 
 ## Quickstart
 
-### 1. Initializing and Creating a Server
+### 1. A complete server
 
 ```c
+#include <stdio.h>
+#include <string.h>
 #include "ezgrpc2.h"
 
+static void handle_message(ezgrpc2_server *server, ezgrpc2_event *event) {
+  /* the request messages; this server ignores their content */
+  ezgrpc2_message *request;
+  while ((request = ezgrpc2_messages_pop(event->message.messages)) != nullptr)
+    ezgrpc2_message_free(request);
+
+  /* a unary call answers once the client has finished sending */
+  if (!event->message.end_stream)
+    return;
+
+  const char reply[] = "Hello from ezgrpc2!";
+  ezgrpc2_messages *response = ezgrpc2_messages_new(nullptr);
+  ezgrpc2_messages_push(response, ezgrpc2_message_new(0, (void *)reply, strlen(reply)));
+
+  /* both calls only queue frames; the next poll writes them */
+  ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id,
+                                     response);
+  ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                    EZGRPC2_GRPC_STATUS_OK);
+  ezgrpc2_messages_free(response);
+}
+
 int main(void) {
-  // 1. Initialize library globals
   ezgrpc2_global_init(0);
 
-  // 2. Create server listening on IPv4 and IPv6
-  uint16_t port = 19009;
-  ezgrpc2_server *server = ezgrpc2_server_new(
-      "0.0.0.0", port,  // IPv4 binding
-      "::",      port,  // IPv6 binding
-      16,               // Listen backlog
-      nullptr,          // Server settings (optional)
-      nullptr           // HTTP/2 settings (optional)
-  );
+  ezgrpc2_server *server = ezgrpc2_server_new("0.0.0.0", 19009, /* IPv4 */
+                                              "::", 19009,      /* IPv6 */
+                                              1024,             /* listen backlog */
+                                              nullptr,          /* server settings */
+                                              nullptr);         /* HTTP/2 settings */
+  if (server == nullptr)
+    return 1;
 
-  // 3. (Optional) Enable TLS / SSL with OpenSSL
-  // ezgrpc2_server_enable_tls(server, "server.crt", "server.key");
-
-  // 4. (Optional) Register standard Health & Reflection protocols
+  /* optional */
+  /* ezgrpc2_server_enable_tls(server, "server.crt", "server.key"); */
   ezgrpc2_health_register(server);
   ezgrpc2_reflection_register(server);
 
-  // 5. Register your gRPC RPC path
-  ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHello", &my_handler, 0, 0);
+  /* the userdata pointer comes back in every event for this path */
+  static int say_hello;
+  ezgrpc2_server_register_path(server, "/helloworld.Greeter/SayHello", &say_hello, 0, 0);
 
-  // ... Run poll loop ...
+  ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
+  for (;;) {
+    /* writes queued responses, then waits up to 500 ms for new events */
+    if (ezgrpc2_server_poll(server, events, 500) < 0)
+      break;
 
+    /* events come in blocks; read until none are left */
+    ezgrpc2_event *block;
+    size_t count;
+    while ((block = ezgrpc2_events_read(events, &count)) != nullptr) {
+      for (size_t i = 0; i < count; i++) {
+        ezgrpc2_event *event = &block[i];
+        if (ezgrpc2_health_handle_event(server, event) ||
+            ezgrpc2_reflection_handle_event(server, event)) {
+          /* answered by the built-in services */
+        } else if (event->type == EZGRPC2_EVENT_MESSAGE && event->userdata == &say_hello) {
+          handle_message(server, event);
+        } else if (event->type == EZGRPC2_EVENT_DATALOSS) {
+          ezgrpc2_server_session_stream_end(server, event->session_uuid,
+                                            event->dataloss.stream_id,
+                                            EZGRPC2_GRPC_STATUS_DATA_LOSS);
+        }
+
+        /* the application owns the received messages */
+        if (event->type == EZGRPC2_EVENT_MESSAGE)
+          ezgrpc2_messages_free(event->message.messages);
+      }
+      ezgrpc2_free(block);
+    }
+  }
+
+  ezgrpc2_events_free(events);
   ezgrpc2_server_free(server);
   ezgrpc2_global_cleanup();
   return 0;
 }
 ```
 
-### 2. Event-Driven Request Handling
+Paths that are not registered are answered with `UNIMPLEMENTED` automatically and produce no event.
 
-```c
-ezgrpc2_events *events = ezgrpc2_events_new(nullptr);
+### 2. Protobuf-C requests and responses
 
-while (running) {
-  // Poll incoming frames with a 500ms timeout
-  int n = ezgrpc2_server_poll(server, events, 500);
-  if (n <= 0) continue;
-
-  size_t count = 0;
-  ezgrpc2_event *ev = ezgrpc2_events_read(events, &count);
-  for (size_t i = 0; i < count; i++) {
-    switch (ev[i].type) {
-      case EZGRPC2_EVENT_MESSAGE: {
-        // Pop received message
-        ezgrpc2_message *msg = ezgrpc2_messages_pop(ev[i].message.messages);
-
-        // Send a response back
-        char reply_payload[] = "Hello from ezgrpc2!";
-        ezgrpc2_message *res = ezgrpc2_message_new(0, reply_payload, sizeof(reply_payload));
-        ezgrpc2_messages *res_list = ezgrpc2_messages_new(nullptr);
-        ezgrpc2_messages_push(res_list, res);
-
-        ezgrpc2_server_session_stream_send(server, ev[i].session_uuid, ev[i].message.stream_id, res_list);
-        ezgrpc2_server_session_stream_end(server, ev[i].session_uuid, ev[i].message.stream_id, EZGRPC2_GRPC_STATUS_OK);
-
-        ezgrpc2_messages_free(res_list);
-        ezgrpc2_message_free(msg);
-        break;
-      }
-      case EZGRPC2_EVENT_TIMEOUT:
-        printf("Stream %d exceeded deadline\n", ev[i].timeout.stream_id);
-        break;
-      case EZGRPC2_EVENT_CANCEL:
-        printf("Stream %d cancelled by client\n", ev[i].cancel.stream_id);
-        break;
-      default:
-        break;
-    }
-  }
-  ezgrpc2_free(ev);
-}
-ezgrpc2_events_free(events);
-```
-
-### 3. Protobuf-C Unpacking & Packing
-
-When compiling with `protobuf-c` available, you can unpack requests and construct responses with zero boilerplate:
+With `protobuf-c` installed, unpack requests and pack responses directly:
 
 ```c
 #include "helloworld.pb-c.h"
 
-// Unpack incoming request
+ezgrpc2_message *req_msg = ezgrpc2_messages_pop(event->message.messages);
 Helloworld__HelloRequest *req = EZGRPC2_PB_UNPACK(
     Helloworld__HelloRequest, &helloworld__hello_request__descriptor, req_msg);
+ezgrpc2_message_free(req_msg);
 
-// Prepare protobuf response
 Helloworld__HelloReply reply = HELLOWORLD__HELLO_REPLY__INIT;
 reply.message = "Hello, world!";
-
-// Pack response directly into an ezgrpc2_messages queue
 ezgrpc2_messages *res_msgs = ezgrpc2_pb_create_response((ProtobufCMessage *)&reply);
 
-// Send response and finish stream
 ezgrpc2_server_session_stream_send(server, event->session_uuid, event->message.stream_id, res_msgs);
-ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id, EZGRPC2_GRPC_STATUS_OK);
+ezgrpc2_server_session_stream_end(server, event->session_uuid, event->message.stream_id,
+                                  EZGRPC2_GRPC_STATUS_OK);
 
 ezgrpc2_messages_free(res_msgs);
 EZGRPC2_PB_FREE_UNPACKED(req);
 ```
 
-### 4. Custom Metadata, Trailers, and Rich Errors
+### 3. Metadata, trailers and rich errors
 
-Send trailing metadata and rich error details (`google.rpc.Status` with `ErrorInfo`):
+Read a request header and end the stream with custom trailers:
 
 ```c
-// Return an error with trailing status details
-ezgrpc2_metadata_entry trailers[1] = {
-    {.key = "x-server-meta", .value = "custom-value", .key_len = 13, .value_len = 12}
+size_t len;
+const char *agent = ezgrpc2_metadata_get(server, event->session_uuid, event->message.stream_id,
+                                         "user-agent", &len);
+
+ezgrpc2_metadata_entry trailers[] = {
+    {.key = "x-custom-reply", .value = "pong", .key_len = 14, .value_len = 4},
+};
+ezgrpc2_server_session_stream_end2(server, event->session_uuid, event->message.stream_id,
+                                   EZGRPC2_GRPC_STATUS_OK, nullptr, trailers, 1);
+```
+
+Return an error with `google.rpc.Status` details, serialized into `grpc-status-details-bin`:
+
+```c
+ezgrpc2_status_detail_entry detail = {
+    .type_url = "type.googleapis.com/google.rpc.ErrorInfo",
+    .value = error_info_bytes, /* a serialized google.rpc.ErrorInfo */
+    .value_len = error_info_len,
 };
 
-// End stream with Rich Error Details serialized to grpc-status-details-bin:
-ezgrpc2_server_session_stream_end_with_details(
-    server, session_uuid, stream_id,
-    EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT,
-    "Invalid name provided",
-    trailers, 1,
-    "type.googleapis.com/google.rpc.ErrorInfo",
-    error_info_bytes, error_info_len
-);
+ezgrpc2_server_session_stream_end_with_status_details(
+    server, event->session_uuid, event->message.stream_id,
+    EZGRPC2_GRPC_STATUS_INVALID_ARGUMENT, "Invalid name provided",
+    &detail, 1,     /* details */
+    nullptr, 0);    /* extra trailers */
+```
+
+### 4. Bearer token authentication
+
+```c
+static bool validate_token(const char *token, void *user_data) {
+  return strcmp(token, "secret") == 0;
+}
+
+ezgrpc2_interceptor auth = ezgrpc2_interceptor_create_bearer_auth(validate_token, nullptr);
+ezgrpc2_server_add_interceptor(server, &auth);
+
+/* in the event loop, before running a handler: */
+if (!ezgrpc2_server_intercept_pre(server, event, "SayHello"))
+  continue; /* the stream was already ended with UNAUTHENTICATED */
 ```
 
 ---
 
 ## Complete Example & Integration Tests
 
-The repository includes a comprehensive, verified example under [`examples/python_client_c_server/`](examples/python_client_c_server/):
+[`examples/python_client_c_server/`](examples/python_client_c_server/) contains a full server and a Python test client:
 
-- **Server (`server.c`)**: Implements Unary, Server Streaming, Client Streaming, Bidirectional Streaming, Rich Errors, Gzip compression, Bearer auth interceptors, Health Check, and Server Reflection.
-- **Client (`client.py`)**: Official Python `grpcio` client testing and validating all 9 RPC scenarios across both plaintext (`h2c`) and secure TLS channels.
+- **`server.c`**: unary, server streaming, client streaming and bidirectional streaming handlers, trailers, rich errors, a logging interceptor, health checking and reflection. Gzip-compressed requests are decompressed by the library. Set `THREADS=N` to run N event loops on the same port.
+- **`client.py`**: the official Python `grpcio` client, checking 9 scenarios over cleartext (`h2c`) and TLS.
 
-Run the test suite:
+Run the tests:
+
 ```bash
-# Run unit tests
+# unit tests
 make -C src/tests test
 
-# Run cleartext Python integration tests
+# Python integration tests, cleartext and TLS
 make -C examples/python_client_c_server test
-
-# Run TLS Python integration tests
 make -C examples/python_client_c_server test-tls
 
-# Or run everything with one command:
+# everything
 make test
 ```
 
@@ -262,11 +314,12 @@ make test
 
 ## Continuous Integration (CI)
 
-Every commit and pull request is automatically tested via GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) against:
-- **OS Matrix**: Ubuntu 24.04 and Ubuntu 22.04.
-- **Compiler Matrix**: GCC and Clang (with C23 standard compliance).
-- **Allocators Matrix**: Standard libc `malloc`, Microsoft `mimalloc`, and `jemalloc`.
-- **Sanitizers**: AddressSanitizer (`ASAN=1`) to guarantee memory safety and zero leaks.
+Every push and pull request is tested with GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) on:
+
+- **OS**: Ubuntu 24.04 and Ubuntu 22.04
+- **Compilers**: GCC and Clang
+- **Allocators**: libc `malloc`, `mimalloc` and `jemalloc`
+- **Sanitizers**: AddressSanitizer builds (`ASAN=1`)
 
 ---
 
